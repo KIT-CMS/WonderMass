@@ -1,14 +1,14 @@
 #!/bin/bash
 set -x
 
-if [ "$(whoami)" == "glusheno" ] || [ "$(whoami)" == "ohlushch" ] ; then
+if [ "$USER" == "glusheno" ] || [ "$USER" == "ohlushch" ] ; then
     source /afs/cern.ch/user/o/ohlushch/.ssh/app-env
+else
+    alias send="tput bel"
 fi
 
 
 # Set up CMSSW
-# cd $RUNDIR
-export HOME=$PWD # needed for setup_env in batch
 SCRAM_ARCH=slc6_amd64_gcc630
 export VO_CMS_SW_DIR=/cvmfs/cms.cern.ch
 source $VO_CMS_SW_DIR/cmsset_default.sh
@@ -37,3 +37,5 @@ if [ -z "$CORES" ]
 then
       export CORES=`grep -c ^processor /proc/cpuinfo`
 fi
+
+if ! scram b -j $CORES ; then send "exit (compilation error) for "${OUTPUTDIR}; exit ; fi
