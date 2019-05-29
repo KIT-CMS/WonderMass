@@ -1,11 +1,18 @@
 #!/bin/bash
 set -x
 
+sen() {
+    if [[ $# -eq 0 ]] ; then
+        echo  "pass" | mail -s "test wm" "greyxray@gmail.com"
+    else
+        echo $l | mail -s "test wm" "greyxray@gmail.com"
+    fi
+}
 
 if [ "$USER" == "glusheno" ] || [ "$USER" == "ohlushch" ] ; then
     if ! type send | grep -q 'function' ; then source /afs/cern.ch/user/o/ohlushch/.ssh/app-env ; fi
 else
-    alias send="tput bel"
+    alias send=sen
 fi
 
 

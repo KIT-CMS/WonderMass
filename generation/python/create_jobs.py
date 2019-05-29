@@ -45,6 +45,7 @@ def parse_arguments():
     parser.add_argument('-m', "--mass", type=str, nargs='+', default=["125"], help="")
     parser.add_argument('-p', "--prefix", type=str, default=None, help="")
     parser.add_argument('-s', "--save-minbias", default=False, action='store_true', help="")
+    parser.add_argument('--local', default=False, action='store_true', help="")
     parser.add_argument("--submit", default=False, action='store_true', help="")
 
     args = parser.parse_args()
@@ -103,6 +104,13 @@ def main(args):
         args.file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../scripts/node.sh")
     jobfile = open(args.file, "r").read()
     job = open(os.path.join(jobdir, "node.sh"), "w")
+    if args.local:
+        # rm setup_env.sh; curl -O https://raw.githubusercontent.com/KIT-CMS/WonderMass/master/bin/generation/setup_env.sh ; sed -i 's/^git\ clone\ git@github.com:KIT-CMS\/WonderMass.git.*/_/g' setup_env.sh ; cat setup_env.sh
+        wm = str(os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../../WonderMass")))
+        wm = wm.replace('/', '\\/')
+        # edit node.sh such as local current WM would be copied to the node
+        jobfile = jobfile.replace('curl -O https://raw.githubusercontent.com/KIT-CMS/WonderMass/master/bin/generation/setup_env.sh',
+            "curl -O https://raw.githubusercontent.com/KIT-CMS/WonderMass/master/bin/generation/setup_env.sh ; sed -i 's/^git\\ clone\\ git@github.com:KIT-CMS\\/WonderMass.git.*/cp\\ -r\\ %s\\ ./g' setup_env.sh" % (wm))
     job.write(jobfile)
     job.close()
 
