@@ -46,6 +46,7 @@ else
 fi
 ls -la $EOS_HOME
 OUTPUTDIR=$OUTPUTDIR/${CMSSW_VERSION}/${TYPE}_${ERA}_${CONDITIONS}_${BEAMSPOT}${PREFIX}/${MASS}GeV/${ID}
+OUTPUTDIR=sed 's/:/'_'/g' <<<"$OUTPUTDIR"
 if [ ! -d "$OUTPUTDIR" ]; then
   mkdir -p $OUTPUTDIR
 fi

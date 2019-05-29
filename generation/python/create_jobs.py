@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # example:
-# python generation/python/create_jobs.py -j test_job -n 10 -m 91 -p _test_wm -s -r 1
+# python generation/python/create_jobs.py -j test_job -n 10 -m 91 -p _test_wm -s -r 1 --submit
 
 import os
 import sys
@@ -9,7 +9,7 @@ import sys
 
 jdl = """\
 universe = vanilla
-executable = ./run.sh
+executable = ./node.sh
 output = out/$(ProcId).$(ClusterID).out
 error = err/$(ProcId).$(ClusterID).err
 log = log/$(ProcId).$(ClusterID).log
@@ -100,9 +100,9 @@ def main(args):
 
     # Write job file
     if args.file is None:
-        args.file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../scripts/run.sh")
+        args.file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../scripts/node.sh")
     jobfile = open(args.file, "r").read()
-    job = open(os.path.join(jobdir, "run.sh"), "w")
+    job = open(os.path.join(jobdir, "node.sh"), "w")
     job.write(jobfile)
     job.close()
 
