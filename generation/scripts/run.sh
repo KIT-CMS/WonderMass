@@ -36,25 +36,24 @@ fi
 if [ "$USER" == "glusheno" ] || [ "$USER" == "ohlushch" ] ; then
     source /afs/cern.ch/user/o/ohlushch/.ssh/app-env
     EOS_HOME=/eos/user/o/ohlushch
-    OUTPUTDIR=${OUTPUTDIR_BASE}/${CMSSW_VERSION}/${TYPE}_${ERA}_${CONDITIONS}_${BEAMSPOT}${PREFIX}
-else
+    OUTPUTDIR=/eos/user/o/ohlushch/Nostradamas/mass_regression
+elif [ "$(whoami)" == "swunsch" ] || [ "$(whoami)" == "swunsch" ] ; then
     EOS_HOME=/eos/user/s/swunsch
-    OUTPUTDIR=${OUTPUTDIR_BASE}
+    OUTPUTDIR=${EOS_HOME}/mass_regression
+else
+    send "exit for "${OUTPUTDIR}; exit
 fi
 ls -la $EOS_HOME
+OUTPUTDIR=$OUTPUTDIR/${CMSSW_VERSION}/${TYPE}_${ERA}_${CONDITIONS}_${BEAMSPOT}${PREFIX}/${MASS}GeV/${ID}
 if [ ! -d "$OUTPUTDIR" ]; then
   mkdir -p $OUTPUTDIR
 fi
-#####################################
+
 
 copylogs() {
-    cp ${ERA}_${CONDITIONS}_${NUM_EVENTS}_minbias_cmsDrive.log ${OUTPUTDIR}/${ERA}_${CONDITIONS}_${NUM_EVENTS}_minbias_cmsDrive.log
-    cp minbias_cmsRun.log  ${OUTPUTDIR}/minbias_cmsRun.log
-    cp "${TYPE}"_reco_cmsDrive.log  ${OUTPUTDIR}/"${TYPE}"_reco_cmsDrive.log
-    cp "${TYPE}"_reco_cmsRun.log  ${OUTPUTDIR}/"${TYPE}"_reco_cmsRun.log
-    cp "${TYPE}"_miniaod_cmsDrive.log  ${OUTPUTDIR}/"${TYPE}"_miniaod_cmsDrive.log
-    cp "${TYPE}"_miniaod_cmsRun.log  ${OUTPUTDIR}/"${TYPE}"_miniaod_cmsRun.log
-    cp "${TYPE}"_miniAOD-prod_PAT.py  ${OUTPUTDIR}/"${TYPE}"_miniAOD-prod_PAT.py
+    cp *.log ${OUTPUTDIR}/
+    cp *.py ${OUTPUTDIR}/
+    cp *.txt ${OUTPUTDIR}/
     cp Configuration/Generator/python/"${TYPE}"generatorSnipplet_cfi.py  ${OUTPUTDIR}/"${TYPE}"_generatorSnipplet_cfi.py
     cp workspace/ntupleBuilder/src/ntupleBuilder.cc  ${OUTPUTDIR}/ntupleBuilder.cc
 }

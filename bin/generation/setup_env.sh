@@ -1,8 +1,9 @@
 #!/bin/bash
 set -x
 
+
 if [ "$USER" == "glusheno" ] || [ "$USER" == "ohlushch" ] ; then
-    source /afs/cern.ch/user/o/ohlushch/.ssh/app-env
+    if ! type send | grep -q 'function' ; then source /afs/cern.ch/user/o/ohlushch/.ssh/app-env ; fi
 else
     alias send="tput bel"
 fi
@@ -11,8 +12,10 @@ fi
 # Set up CMSSW
 SCRAM_ARCH=slc6_amd64_gcc630
 export VO_CMS_SW_DIR=/cvmfs/cms.cern.ch
+set +x
 source $VO_CMS_SW_DIR/cmsset_default.sh
 source /cvmfs/cms.cern.ch/cmsset_default.shlt
+set -x
 scram project CMSSW CMSSW_9_4_13_UL1
 cd CMSSW_9_4_13_UL1/src
 if ! eval `scramv1 runtime -sh` ; then send "exit for "${OUTPUTDIR}; exit ; fi
@@ -39,3 +42,5 @@ then
 fi
 
 if ! scram b -j $CORES ; then send "exit (compilation error) for "${OUTPUTDIR}; exit ; fi
+
+echo "Environment successfully set"

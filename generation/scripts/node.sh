@@ -7,3 +7,5 @@ curl -O https://raw.githubusercontent.com/KIT-CMS/WonderMass/master/bin/generati
 source setup_env.sh
 
 WonderMass/generation/scripts/./run.sh "$@"
+
+exit
