@@ -34,8 +34,6 @@ git clone git@github.com:KIT-CMS/WonderMass.git
 # if ! curl -O https://transfer.sh/qn9Jr/workspace.tar.gz ; then send "exit for "${OUTPUTDIR}; exit ; fi
 # if ! tar -zxvf workspace.tar.gz ; then send "exit for "${OUTPUTDIR}; exit ; fi
 # rm workspace.tar.gz
-export CORES=`grep -c ^processor /proc/cpuinfo`
-
 if [ -z "$CORES" ]
 then
       export CORES=`grep -c ^processor /proc/cpuinfo`
@@ -44,3 +42,4 @@ fi
 if ! scram b -j $CORES ; then send "exit (compilation error) for "${OUTPUTDIR}; exit ; fi
 
 echo "Environment successfully set"
+set +x
