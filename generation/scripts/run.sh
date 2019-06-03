@@ -9,8 +9,8 @@ ID=$1
 TYPE=$2
 MASS=$3
 NUM_EVENTS=$4
-PREFIX="_condor_wm"
-if [ -z "$5" ] ; then PREFIX=$5 ; fi
+PREFIX=$5
+
 #
 # this has gen, sim, and reco levels
 # https://github.com/cms-sw/cmssw/blob/master/Configuration/PyReleaseValidation/python/relval_steps.py
@@ -42,16 +42,18 @@ elif [ "$(whoami)" == "swunsch" ] || [ "$(whoami)" == "swunsch" ] ; then
     EOS_HOME=/eos/user/s/swunsch
     OUTPUTDIR=${EOS_HOME}/mass_regression
 else
-    send "exit for "${OUTPUTDIR}; exit
+    send "exit unknown user for "${OUTPUTDIR}; exit
 fi
 ls -la $EOS_HOME
-OUTPUTDIR=$OUTPUTDIR/${CMSSW_VERSION}/${TYPE}_${ERA}_${CONDITIONS}_${BEAMSPOT}${PREFIX}/${MASS}GeV/${ID}
-OUTPUTDIR=sed 's/:/'_'/g' <<<"$OUTPUTDIR"
+OUTPUTDIR=$OUTPUTDIR/${CMSSW_VERSION}/${TYPE}_${ERA}_${CONDITIONS}${PREFIX}/${MASS}GeV/${ID}
+OUTPUTDIR=$(sed 's/:/'_'/g' <<< "$OUTPUTDIR")
 if [ ! -d "$OUTPUTDIR" ]; then
   mkdir -p $OUTPUTDIR
 fi
-
-
+if [ ! -d "$OUTPUTDIR" ]; then
+  send "exit couldn't create "${OUTPUTDIR}
+  exit
+fi
 copylogs() {
     cp *.log ${OUTPUTDIR}/
     cp *.py ${OUTPUTDIR}/
@@ -74,7 +76,7 @@ if ! cmsDriver.py MinBias_13TeV_pythia8_TuneCUETP8M1_cfi \
 then
     cat ${ERA}_${CONDITIONS}_${NUM_EVENTS}_minbias_cmsDrive.log
     copylogs
-    ltr
+    ls -l
     send "exit for "${OUTPUTDIR}
     exit
 fi
@@ -83,7 +85,7 @@ if ! cmsRun MinBias_13TeV_pythia8_TuneCUETP8M1_cfi_GEN_SIM_RECOBEFMIX_DIGI_RECO.
 then
     cat minbias_cmsRun.log
     copylogs
-    ltr
+    ls -l
     send "exit for "${OUTPUTDIR}
     exit
 fi
@@ -143,7 +145,7 @@ if ! cmsDriver.py "${TYPE}"_miniAOD-prod \
 then
     cat "${TYPE}"_miniaod_cmsDrive.log
     cp "${TYPE}"_miniaod_cmsDrive.log  ${OUTPUTDIR}/"${TYPE}"_miniaod_cmsDrive.log
-    ltr
+    ls -l
     send "exit for "${OUTPUTDIR}
     exit
 fi
@@ -151,7 +153,7 @@ if ! cmsRun "${TYPE}"_miniAOD-prod_PAT.py &> "${TYPE}"_miniaod_cmsRun.log
 then
     cat "${TYPE}"_miniaod_cmsRun.log
     copylogs
-    ltr
+    ls -l
     send "exit for "${OUTPUTDIR}
     exit
 fi
@@ -161,14 +163,13 @@ fi
 echo $'\n'"### Run ntupleBuilder analyzer on MiniAOD"
 if ! sed -i -e "s,^files =,files = ['file:""${TYPE}""_miniAOD-prod_PAT.root'] #,g" WonderMass/ntupleBuilder/python/run_cfi.py  ; then send "exit for "${OUTPUTDIR}; exit ; fi
 if ! sed -i -e "s,^settype =,settype = \""$TYPE"\" #,g" WonderMass/ntupleBuilder/python/run_cfi.py ; then send "exit for "${OUTPUTDIR}; exit ; fi
-
 if ! cmsRun WonderMass/ntupleBuilder/python/run_cfi.py ; then send "exit for "${OUTPUTDIR}; exit ; fi
 
 
 echo $'\n'"### Copy files to output folder"
 # auto mount of EOS
 copylogs
-if [ -z "$6" ]
+if [ "$6" == "1" ]
 then
     xrdcp -f MinBias_13TeV_pythia8_TuneCUETP8M1_cfi_GEN_SIM_RECOBEFMIX_DIGI_RECO.root root://eosuser.cern.ch/${OUTPUTDIR}/MinBias_13TeV_pythia8_TuneCUETP8M1_cfi_GEN_SIM_RECOBEFMIX_DIGI_RECO.root
     # if 6 arguments are given as parameters copy also the minbias, miniaod samples
@@ -188,5 +189,5 @@ else
 fi
 
 
-ltr ${OUTPUTDIR}
+ls -l ${OUTPUTDIR}
 send "done in "${OUTPUTDIR}

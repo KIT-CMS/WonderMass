@@ -15,14 +15,11 @@ else
     alias send=sen
 fi
 
-
 # Set up CMSSW
 SCRAM_ARCH=slc6_amd64_gcc630
 export VO_CMS_SW_DIR=/cvmfs/cms.cern.ch
-set +x
 source $VO_CMS_SW_DIR/cmsset_default.sh
-source /cvmfs/cms.cern.ch/cmsset_default.shlt
-set -x
+source /cvmfs/cms.cern.ch/cmsset_default.sh
 scram project CMSSW CMSSW_9_4_13_UL1
 cd CMSSW_9_4_13_UL1/src
 if ! eval `scramv1 runtime -sh` ; then send "exit for "${OUTPUTDIR}; exit ; fi
@@ -41,6 +38,7 @@ git clone git@github.com:KIT-CMS/WonderMass.git
 # if ! curl -O https://transfer.sh/qn9Jr/workspace.tar.gz ; then send "exit for "${OUTPUTDIR}; exit ; fi
 # if ! tar -zxvf workspace.tar.gz ; then send "exit for "${OUTPUTDIR}; exit ; fi
 # rm workspace.tar.gz
+scram b clean
 if [ -z "$CORES" ]
 then
       export CORES=`grep -c ^processor /proc/cpuinfo`
