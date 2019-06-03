@@ -109,7 +109,7 @@ files=[
     # "file:miniAOD-prod_PAT.root",
     # root://dcache-cms-xrootd.desy.de:1094/
 ]
-files = ['file:DYtest_miniAOD-prod_PAT.root'] # ['file:GGHminiAOD-prod_PAT.root']  # files
+files = ['file:/eos/user/o/ohlushch/Nostradamas/mass_regression/CMSSW_9_4_13_UL1/DYtest_Run2_2017_FastSim_auto_phase1_2017_realistic_DYtest_1000_wm/91GeV/0/miniAOD-prod_PAT.root'] # ['file:GGHminiAOD-prod_PAT.root']  # files
 
 process.source = cms.Source(
     "PoolSource", fileNames=cms.untracked.vstring(*files))
@@ -124,6 +124,8 @@ settype = "DYtest"  # "GGH"  # "GGH"  # "DY"
 # Register fileservice for output file
 process.ntupleBuilder = cms.EDAnalyzer("ntupleBuilder",
     processType=cms.string(settype),
+    debug=cms.bool(False),
+    baseline=cms.bool(True),
 )
 process.TFileService = cms.Service(
     "TFileService", fileName=cms.string(settype + "_ntuple.root"))
