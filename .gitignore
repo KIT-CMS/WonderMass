@@ -3,10 +3,19 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# root
+*.root
+
+# CMSSW
+
 # C extensions
 *.so
 
 # Distribution / packaging
+plots/
+temp/
+delme/
+jobs_dirs/
 .Python
 build/
 develop-eggs/
