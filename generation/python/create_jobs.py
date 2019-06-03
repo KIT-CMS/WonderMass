@@ -1,7 +1,22 @@
 #!/usr/bin/env python
 
 # example:
-# python generation/python/create_jobs.py -j test_job -n 10 -m 91 -p _test_wm -s -r 1 --submit
+# test:
+# python generation/python/create_jobs.py -j test_job -n 10 -m 91 -p _test_wm -r 1 -s --submit
+#
+# rm -rf test; python ../generation/python/create_jobs.py -j test     -n 10 -m 125 -p test -r 1 -t GGH --local  -s --submit
+# cat test/err/* ; cat test/out/*
+#
+# ggH
+# python ../generation/python/create_jobs.py -j GGH_1000 -n 1000 -m 125 -p _GGH_1000_wm  -r 10 -t GGH --local -s --submit
+# qqH
+# python ../generation/python/create_jobs.py -j QQH_1000 -n 1000 -m 125 -p _QQH_1000_wm  -r 10 -t QQH --local -s --submit
+#
+# DYTT
+# python ../generation/python/create_jobs.py -j DYTT_1000 -n 1000 -m 91 -p _DYTT_1000_wm  -r 10 -t DYTT --local -s --submit
+#
+# DYnomaxmass
+# python ../generation/python/create_jobs.py -j DYnomaxmass_1000 -n 1000 -m 91 -p _DYnomaxmass_1000_wm  -r 10 -t DYnomaxmass --local -s --submit
 
 import os
 import sys
@@ -21,8 +36,25 @@ notification  = Complete
 notify_user   = olena.hlushchenko@desy.de
 queue arguments from arguments.txt\
 """
+jdl_local = """\
+universe = vanilla
+executable = ./node.sh
+output = out/$(ProcId).$(ClusterID).out
+error = err/$(ProcId).$(ClusterID).err
+log = log/$(ProcId).$(ClusterID).log
+requirements = (OpSysAndVer =?= "SLCern6")
+getenv = true
+max_retries = 3
+RequestCpus = 1
++MaxRuntime = 28800
+notification  = Complete
+notify_user   = olena.hlushchenko@desy.de
+transfer_output_files = ""
+queue arguments from arguments.txt\
+"""
 # 1h 3600
 # 8h 28800
+
 
 def mkdir(path):
     print path
@@ -43,7 +75,7 @@ def parse_arguments():
     parser.add_argument('-n', "--num-events", type=str, default="1000", help="")
     parser.add_argument('-t', "--type", type=str, nargs='+', default=["DYtest"], help="")
     parser.add_argument('-m', "--mass", type=str, nargs='+', default=["125"], help="")
-    parser.add_argument('-p', "--prefix", type=str, default=None, help="")
+    parser.add_argument('-p', "--prefix", type=str, default='""', help="")
     parser.add_argument('-s', "--save-minbias", default=False, action='store_true', help="")
     parser.add_argument('--local', default=False, action='store_true', help="")
     parser.add_argument("--submit", default=False, action='store_true', help="")
@@ -69,9 +101,7 @@ def main(args):
     print("Mass points:", mass_points)
     for mass in mass_points:
         for boson_type in proc:
-            l = [str(id_counter), boson_type, mass, num_events]
-            if args.prefix is not None:
-                l.append(args.prefix)
+            l = [str(id_counter), boson_type, mass, num_events, args.prefix]
             if args.save_minbias:
                 l.append("1")
             l.append("\n")
@@ -90,7 +120,10 @@ def main(args):
 
     # Write jdl file
     out = open(os.path.join(jobdir, "job.jdl"), "w")
-    out.write(jdl)
+    if args.local:
+        out.write(jdl_local)
+    else:
+        out.write(jdl)
     out.close()
 
     # Write argument list
@@ -101,16 +134,12 @@ def main(args):
 
     # Write job file
     if args.file is None:
-        args.file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../scripts/node.sh")
+        if args.local:
+            args.file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../scripts/node_local.sh")
+        else:
+            args.file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../scripts/node.sh")
     jobfile = open(args.file, "r").read()
     job = open(os.path.join(jobdir, "node.sh"), "w")
-    if args.local:
-        # rm setup_env.sh; curl -O https://raw.githubusercontent.com/KIT-CMS/WonderMass/master/bin/generation/setup_env.sh ; sed -i 's/^git\ clone\ git@github.com:KIT-CMS\/WonderMass.git.*/_/g' setup_env.sh ; cat setup_env.sh
-        wm = str(os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../../WonderMass")))
-        wm = wm.replace('/', '\\/')
-        # edit node.sh such as local current WM would be copied to the node
-        jobfile = jobfile.replace('curl -O https://raw.githubusercontent.com/KIT-CMS/WonderMass/master/bin/generation/setup_env.sh',
-            "curl -O https://raw.githubusercontent.com/KIT-CMS/WonderMass/master/bin/generation/setup_env.sh ; sed -i 's/^git\\ clone\\ git@github.com:KIT-CMS\\/WonderMass.git.*/cp\\ -r\\ %s\\ ./g' setup_env.sh" % (wm))
     job.write(jobfile)
     job.close()
 
