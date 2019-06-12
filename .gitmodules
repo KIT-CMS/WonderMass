@@ -1,0 +1,3 @@
+[submodule "Nostradamass"]
+	path = Nostradamass
+	url = git@github.com:KIT-CMS/Nostradamass.git
