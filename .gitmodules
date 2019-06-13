@@ -1,3 +1,6 @@
 [submodule "Nostradamass"]
 	path = Nostradamass
 	url = git@github.com:KIT-CMS/Nostradamass.git
+[submodule "friend-tree-producer"]
+	path = friend-tree-producer
+	url = git@github.com:KIT-CMS/friend-tree-producer.git
