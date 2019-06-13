@@ -11,10 +11,13 @@ from sklearn.model_selection import train_test_split
 import keras.backend as K
 import tensorflow as tf
 
-config = tf.ConfigProto()
-config.gpu_options.allow_growth=True
-sess = tf.Session(config=config)
-K.set_session(sess)
+gpu_options = tf.GPUOptions(allow_growth=True)
+sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+K.tensorflow_backend.set_session(sess)
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth=True
+# sess = tf.Session(config=config)
+# K.set_session(sess)
 
 
 def build_model(inputs, outputs_t):
@@ -148,7 +151,7 @@ def main():
     history = model.fit(x_train, y_train,
                         validation_data=(x_val, y_val),
                         batch_size=10000, epochs=10000,
-                        callbacks=[EarlyStopping(patience=50),
+                        callbacks=[EarlyStopping(patience=100),
                                    ModelCheckpoint(
                                        filepath="model.h5", save_best_only=True, verbose=1)],
                         shuffle=True, verbose=1)

@@ -57,6 +57,79 @@ def resample(x):
     return idx_re, idx_train_re, idx_test_re
 
 
+def resample_new(x):
+    px1 = x[:, 0]
+    py1 = x[:, 1]
+    pz1 = x[:, 2]
+    px2 = x[:, 3]
+    py2 = x[:, 4]
+    pz2 = x[:, 5]
+    m_t = 1.77
+    e1 = np.sqrt(m_t**2 + px1**2 + py1**2 + pz1**2)
+    e2 = np.sqrt(m_t**2 + px2**2 + py2**2 + pz2**2)
+    px = px1 + px2
+    py = py1 + py2
+    pz = pz1 + pz2
+    e = e1 + e2
+    m = np.sqrt(e**2 - px**2 - py**2 - pz**2)
+
+    #only events within this tow percentiles are used
+    p = np.percentile(m, [0.5, 99.5])
+
+    """
+    counts, bins = np.histogram(m, bins=20, range=p)
+    plt.figure()
+    plt.plot(bins[0:20]+(bins[1]-bins[0])/2,counts,".")
+    plt.savefig("testhist.png")
+    """
+    bins=np.linspace(p[0],p[1],num=41)
+    print(bins)
+    indices=[]
+    masses=[]
+    for i in range(len(bins)-1):
+        indexlist=[]
+        #masslist=[]
+        for n,mass in enumerate(m):
+            if bins[i]<=mass and mass<bins[i+1]:
+                indexlist.append(n)
+                #masslist.append(mass)
+        indices.append(indexlist)
+        #masses.append(masslist)
+
+    count=0
+    for indexlist in indices:
+        if len(indexlist)>count:
+            count=len(indexlist)
+    print(count)
+    indices_res=[]
+    for indexlist in indices:
+        a=indexlist
+        while len(a)<count-1000:
+            a+=list(np.random.choice(indexlist,1000))
+        while len(a)<count-100:
+            a+=list(np.random.choice(indexlist,100))
+        while len(a)<count:
+            a+=list(np.random.choice(indexlist,1))
+        indices_res+=a
+
+    print("Min/max resampling mass range: {}/{}".format(p[0], p[-1]))
+    from sklearn.model_selection import train_test_split
+    idx_re = np.array(indices_res)
+    idx_train_re,idx_test_re = train_test_split(idx_re, train_size=0.8, random_state=1234)
+    idx_train_re=np.array(idx_train_re)
+    idx_test_re=np.array(idx_test_re)
+    """
+    plt.figure()
+    plt.hist(m[idx_train_re],bins=20)
+    plt.savefig("testhistafter.png")
+
+
+    counts_after, _ = np.histogram(m[idx_re], bins=bins)
+    pickle.dump([counts, bins, counts_after], open("resample.pickle", "wb"))
+    """
+    return idx_re, idx_train_re, idx_test_re
+
+
 def main():
     # Declare inputs and outputs
     components = ["px", "py", "pz", "e"]
@@ -86,7 +159,7 @@ def main():
     y_h = np.vstack([data[key] for key in outputs_h]).T
 
     # Resample events to flat mass
-    idx, idx_train, idx_test = resample(y_t)
+    idx, idx_train, idx_test = resample_new(y_t)
     x_resampled = x[idx]
     y_t_resampled = y_t[idx]
     print("x: Before/after resampling: {} / {}".format(x.shape, x_resampled.shape))

@@ -13,10 +13,14 @@ from keras.utils import plot_model
 
 import keras.backend as K
 import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.allow_growth=True
-sess = tf.Session(config=config)
-K.set_session(sess)
+
+gpu_options = tf.GPUOptions(allow_growth=True)
+sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+K.tensorflow_backend.set_session(sess)
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth=True
+# sess = tf.Session(config=config)
+# K.set_session(sess)
 
 
 def main():
@@ -90,11 +94,11 @@ def main():
     additionals = ["t1_gen_e", "t2_gen_e", "h_gen_px", "h_gen_py", "h_gen_pz", "h_gen_e", "h_gen_pt", "h_gen_eta", "h_gen_phi", "h_gen_mass"]
     for key in outputs_t + additionals:
         plt.figure(figsize=(6, 6))
-        p = np.percentile(pred[key], [1, 99])
-        q = np.percentile(truth[key], [1, 99])
+        p = np.percentile(pred[key], [0.1, 99.9])
+        q = np.percentile(truth[key], [0.1, 99.9])
         p = (min(p[0], q[0]), max(p[1], q[1]))
         _, bins, _ = plt.hist(pred[key], histtype="step", lw=3, alpha=0.8,
-                              range=p, bins=30, label="NN")
+                              range=p, bins=20, label="NN")
         plt.hist(truth[key], histtype="step", lw=3, alpha=0.8, bins=bins, label="Truth")
         plt.legend()
         plt.xlabel(key)
@@ -105,7 +109,7 @@ def main():
     for key in outputs_t + additionals:
         plt.figure(figsize=(4, 4))
         diff = truth[key] - pred[key]
-        p = np.percentile(diff, [1, 99])
+        p = np.percentile(diff, [0.1, 99.9])
         _, bins, _ = plt.hist(diff,
                 histtype="step", lw=3, alpha=0.8, range=p, bins=30)
         plt.xlabel(key + " (true - pred)")
@@ -113,7 +117,6 @@ def main():
         plt.savefig(key + "_diff.png")
 
     # Plot relative difference
-    """
     for key in outputs_t + additionals:
         plt.figure(figsize=(4, 4))
         diff = (truth[key] - pred[key])/truth[key]
@@ -123,7 +126,6 @@ def main():
         plt.xlabel(key + " (true - pred)/true")
         plt.xlim((bins[0], bins[-1]))
         plt.savefig(key + "_reldiff.png")
-    """
 
     # Plot mass
     def computeMass(d):
@@ -175,7 +177,7 @@ def main():
     plt.figure(figsize=(8, 8))
     p2 = (-2, 2)
     plt.hist2d(mass_truth, (mass_truth - mass_t)/mass_truth,
-            range=(p, p2), bins=(100, 100), norm=mpl.colors.LogNorm())
+            bins=(100, 100), norm=mpl.colors.LogNorm())
     plt.plot(p, [0] * len(p), "-", color="r")
     plt.xlim(p)
     plt.ylim(p2)
