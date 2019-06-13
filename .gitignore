@@ -3,6 +3,24 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# plots
+*.png
+*.jpeg
+*.pdf
+
+# tf
+*.swp
+*.swo
+# *.h5
+.ipynb_checkpoints/
+*.npy
+*.pyc
+*.pickle
+.nfs*
+.__afs*
+architecture.json
+model.json
+
 # root
 *.root
 
@@ -16,7 +34,7 @@ plots/
 temp/
 delme/
 jobs_dirs/
-.Python
+.Python/
 build/
 develop-eggs/
 dist/
