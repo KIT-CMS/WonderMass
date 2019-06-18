@@ -543,24 +543,38 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
   // TODO: https://github.com/cms-sw/cmssw/blob/master/RecoVertex/V0Producer/src/V0Fitter.cc#L49
   // https://github.com/greyxray/AOD_pi0_study/blob/master/AOD_pi0/python/ConfFileWithHPSTracks_cfg.py
   // const std::string processType = ""; // NOTE: To be replace before compilation by the job script.
-  if (processType.compare("GGH") == 0) {
+  std::vector<int> allowed_bosons;
+  if (processType.find("GGH") != std::string::npos) {
       v_h_gen_process = 0;
-      v_h_gen_pdgid = 25;
-  } else if (processType.compare("QQH") == 0) {
+      // v_h_gen_pdgid = 25;
+      allowed_bosons.push_back(25);
+      allowed_bosons.push_back(35);
+      allowed_bosons.push_back(36);
+  } else if (processType.find("QQH") != std::string::npos) {
       v_h_gen_process = 1;
-      v_h_gen_pdgid = 25;
+      // v_h_gen_pdgid = 25;
+      allowed_bosons.push_back(25);
+      allowed_bosons.push_back(35);
+      allowed_bosons.push_back(36);
+      // allowed_bosons.insert(allowed_bosons.end(), a, a+5);
   } else if ((processType.find("DY") != std::string::npos)) {
       v_h_gen_process = 2;
-      v_h_gen_pdgid = 23;
+      // v_h_gen_pdgid = 23;
+
+      allowed_bosons.push_back(23);
   } else {
       throw std::runtime_error("Unknown process type encountered.");
   }
 
   std::vector<reco::GenParticle> genBosonCands;
-  for (auto gen = gens->begin(); gen != gens->end(); gen++) {
-    if (gen->pdgId() == v_h_gen_pdgid && gen->isLastCopy() == 1) {
+  for (auto gen = gens->begin(); gen != gens->end(); gen++)
+  {
+    // if (gen->pdgId() == v_h_gen_pdgid && gen->isLastCopy() == 1)
+    if ((std::find(allowed_bosons.begin(), allowed_bosons.end(), std::abs(gen->pdgId())) != allowed_bosons.end()) && gen->isLastCopy() == 1)
+    {
+      // if (debug) std::cout << "gen->pdgId(): " << gen->pdgId() << "  gen->isLastCopy():" <<  gen->isLastCopy() << " \n";
       if (genBosonCands.size() != 0)
-          std::cerr << "WARNING: Found more than one target boson with PDG id " << v_h_gen_pdgid << "!" << std::endl;
+          std::cerr << "WARNING: Found more than one target boson with PDG id " << gen->pdgId() << "!" << std::endl;
       genBosonCands.emplace_back(*gen);
     }
   }
