@@ -7,8 +7,8 @@ import os
 from functools import partial
 
 
-path = "output.root"
-
+path = "/local/scratch/ssd2/hborsch/di_tau_mass/DNN/output.root"
+save_path="/local/scratch/ssd2/hborsch/di_tau_mass/DNN/tempsave/"
 
 def resample(x):
     px1 = x[:, 0]
@@ -52,7 +52,7 @@ def resample(x):
     idx_test_re = np.array(idx_test_re)
 
     counts_after, _ = np.histogram(m[idx_re], bins=bins)
-    pickle.dump([counts, bins, counts_after], open("resample.pickle", "wb"))
+    pickle.dump([counts, bins, counts_after], open(save_path+"resample.pickle", "wb"))
 
     return idx_re, idx_train_re, idx_test_re
 
@@ -83,7 +83,7 @@ def resample_new(x):
     plt.savefig("testhist.png")
     """
     bins=np.linspace(p[0],p[1],num=41)
-    print(bins)
+    #print(bins)
     indices=[]
     masses=[]
     for i in range(len(bins)-1):
@@ -125,9 +125,9 @@ def resample_new(x):
 
 
     counts_after, _ = np.histogram(m[idx_re], bins=bins)
-    pickle.dump([counts, bins, counts_after], open("resample.pickle", "wb"))
+    pickle.dump([counts, bins, counts_after], open(save_path+"resample.pickle", "wb"))
     """
-    return idx_re, idx_train_re, idx_test_re
+    return idx_re, idx_train_re, idx_test_re, m
 
 
 def main():
@@ -141,10 +141,10 @@ def main():
     outputs_t = ["t1_gen_" + c for c in components_3]\
               + ["t2_gen_" + c for c in components_3]
     outputs_h = ["h_gen_" + c for c in components]
-    pickle.dump(inputs, open("x.pickle", "wb"))
-    pickle.dump(outputs_n, open("y_n.pickle", "wb"))
-    pickle.dump(outputs_t, open("y_t.pickle", "wb"))
-    pickle.dump(outputs_h, open("y_h.pickle", "wb"))
+    pickle.dump(inputs, open(save_path+"x.pickle", "wb"))
+    pickle.dump(outputs_n, open(save_path+"y_n.pickle", "wb"))
+    pickle.dump(outputs_t, open(save_path+"y_t.pickle", "wb"))
+    pickle.dump(outputs_h, open(save_path+"y_h.pickle", "wb"))
 
     # Load data
     data = {}
@@ -159,23 +159,26 @@ def main():
     y_h = np.vstack([data[key] for key in outputs_h]).T
 
     # Resample events to flat mass
-    idx, idx_train, idx_test = resample_new(y_t)
+    idx, idx_train, idx_test, m = resample_new(y_t)
     x_resampled = x[idx]
     y_t_resampled = y_t[idx]
     print("x: Before/after resampling: {} / {}".format(x.shape, x_resampled.shape))
     print("y_t: Before/after resampling: {} / {}".format(y_t.shape, y_t_resampled.shape))
 
     # Save to disk
-    np.save(open("x.npy", "wb"), x)
-    np.save(open("x_resampled.npy", "wb"), x_resampled)
-    np.save(open("x_train_resampled.npy", "wb"), x[idx_train])
-    np.save(open("x_test_resampled.npy", "wb"), x[idx_test])
-    np.save(open("y_n.npy", "wb"), y_n)
-    np.save(open("y_t.npy", "wb"), y_t)
-    np.save(open("y_t_resampled.npy", "wb"), y_t_resampled)
-    np.save(open("y_t_train_resampled.npy", "wb"), y_t[idx_train])
-    np.save(open("y_t_test_resampled.npy", "wb"), y_t[idx_test])
-    np.save(open("y_h.npy", "wb"), y_h)
+    np.save(open(save_path+"x.npy", "wb"), x)
+    np.save(open(save_path+"x_resampled.npy", "wb"), x_resampled)
+    np.save(open(save_path+"x_train_resampled.npy", "wb"), x[idx_train])
+    np.save(open(save_path+"x_test_resampled.npy", "wb"), x[idx_test])
+    np.save(open(save_path+"y_n.npy", "wb"), y_n)
+    np.save(open(save_path+"y_t.npy", "wb"), y_t)
+    np.save(open(save_path+"y_t_resampled.npy", "wb"), y_t_resampled)
+    np.save(open(save_path+"y_t_train_resampled.npy", "wb"), y_t[idx_train])
+    np.save(open(save_path+"y_t_test_resampled.npy", "wb"), y_t[idx_test])
+    np.save(open(save_path+"y_h.npy", "wb"), y_h)
+    np.save(open(save_path+"mass_train_npy","wb"), m[idx_train])
+    np.save(open(save_path+"mass_test_npy","wb"), m[idx_test])
+
 
 
 if __name__ == "__main__":

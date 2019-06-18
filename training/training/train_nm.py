@@ -19,6 +19,8 @@ K.tensorflow_backend.set_session(sess)
 # sess = tf.Session(config=config)
 # K.set_session(sess)
 
+save_path="/local/scratch/ssd2/hborsch/di_tau_mass/DNN/tempsave/"
+
 
 def build_model(inputs, outputs_t):
     nodes = 500
@@ -132,13 +134,13 @@ def compile_model(model):
 
 
 def main():
-    x_train = np.load(open("x_train_resampled.npy", "rb"))
-    x_val = np.load(open("x_test_resampled.npy", "rb"))
-    y_train = np.load(open("y_t_train_resampled.npy", "rb"))
-    y_val = np.load(open("y_t_test_resampled.npy", "rb"))
+    x_train = np.load(open(save_path+"x_train_resampled.npy", "rb"))
+    x_val = np.load(open(save_path+"x_test_resampled.npy", "rb"))
+    y_train = np.load(open(save_path+"y_t_train_resampled.npy", "rb"))
+    y_val = np.load(open(save_path+"y_t_test_resampled.npy", "rb"))
 
-    inputs = pickle.load(open("x.pickle", "rb"))
-    outputs_t = pickle.load(open("y_t.pickle", "rb"))
+    inputs = pickle.load(open(save_path+"x.pickle", "rb"))
+    outputs_t = pickle.load(open(save_path+"y_t.pickle", "rb"))
     print("Inputs: {}".format(inputs))
     print("Outputs: {}".format(outputs_t))
 
@@ -151,12 +153,12 @@ def main():
     history = model.fit(x_train, y_train,
                         validation_data=(x_val, y_val),
                         batch_size=10000, epochs=10000,
-                        callbacks=[EarlyStopping(patience=100),
+                        callbacks=[EarlyStopping(patience=50),
                                    ModelCheckpoint(
-                                       filepath="model.h5", save_best_only=True, verbose=1)],
+                                       filepath=save_path+"model.h5", save_best_only=True, verbose=1)],
                         shuffle=True, verbose=1)
 
-    pickle.dump({h: history.history[h] for h in history.history}, open("history.pickle", "wb"))
+    pickle.dump({h: history.history[h] for h in history.history}, open(save_path+"history.pickle", "wb"))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,55 @@
+{
+    "input_sequences": [],
+    "inputs": [
+        {
+        "name": "in_0",
+        "variables":
+            [
+            {"name": "t1_rec_px",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "t1_rec_py",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "t1_rec_pz",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "t1_rec_e",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "t2_rec_px",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "t2_rec_py",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "t2_rec_pz",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "t2_rec_e",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "met_rec_px",
+             "scale": 1.0,
+             "offset": 0.0
+            },
+            {"name": "met_rec_py",
+             "scale": 1.0,
+             "offset": 0.0
+            }
+            ]
+        }
+    ],
+    "outputs": [
+        {"name": "out_0",
+         "labels": ["h_mass"]}
+    ]
+}
