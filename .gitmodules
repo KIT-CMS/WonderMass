@@ -4,3 +4,6 @@
 [submodule "friend-tree-producer"]
 	path = friend-tree-producer
 	url = git@github.com:KIT-CMS/friend-tree-producer.git
+[submodule "datasets"]
+	path = datasets
+	url = git@github.com:KIT-CMS/datasets.git
