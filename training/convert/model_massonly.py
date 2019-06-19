@@ -1,6 +1,6 @@
 from keras.models import load_model
 
-save_path="/local/scratch/ssd2/hborsch/di_tau_mass/DNN/tempsave/"
+save_path="tempsave/"
 def main():
     def dummy(y_true, y_pred):
         return y_pred[:,0]

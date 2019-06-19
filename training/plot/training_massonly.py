@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shutil import copyfile
 from keras.models import load_model
-save_path="/local/scratch/ssd2/hborsch/di_tau_mass/DNN/tempsave/"
+save_path="tempsave/"
 
 x_val = np.load(open(save_path+"x_test_resampled.npy", "rb"))
 def dummy(y_true, y_pred):

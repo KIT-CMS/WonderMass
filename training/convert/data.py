@@ -7,8 +7,8 @@ import os
 from functools import partial
 
 
-path = "/local/scratch/ssd2/hborsch/di_tau_mass/DNN/output.root"
-save_path="/local/scratch/ssd2/hborsch/di_tau_mass/DNN/tempsave/"
+path = "output.root"
+save_path="tempsave/"
 
 def resample(x):
     px1 = x[:, 0]

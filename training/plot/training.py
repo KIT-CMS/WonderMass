@@ -21,17 +21,17 @@ K.tensorflow_backend.set_session(sess)
 # config.gpu_options.allow_growth=True
 # sess = tf.Session(config=config)
 # K.set_session(sess)
-
+save_path="tempsave/"
 
 def main():
     # Load data
-    x_train = np.load(open("x_train_resampled.npy", "rb"))
-    x_val = np.load(open("x_test_resampled.npy", "rb"))
-    y_train = np.load(open("y_t_train_resampled.npy", "rb"))
-    y_val = np.load(open("y_t_test_resampled.npy", "rb"))
+    x_train = np.load(open(save_path+"x_train_resampled.npy", "rb"))
+    x_val = np.load(open(save_path+"x_test_resampled.npy", "rb"))
+    y_train = np.load(open(save_path+"y_t_train_resampled.npy", "rb"))
+    y_val = np.load(open(save_path+"y_t_test_resampled.npy", "rb"))
 
-    inputs = pickle.load(open("x.pickle", "rb"))
-    outputs_t = pickle.load(open("y_t.pickle", "rb"))
+    inputs = pickle.load(open(save_path+"x.pickle", "rb"))
+    outputs_t = pickle.load(open(save_path+"y_t.pickle", "rb"))
 
     # Load model
     def dummy(y_true, y_pred):
@@ -187,7 +187,7 @@ def main():
 
     # Plot loss and metrics
     if os.path.exists("history.pickle"):
-        history = pickle.load(open("history.pickle", "rb"))
+        history = pickle.load(open(save_path+"history.pickle", "rb"))
 
         epochs = range(1, len(history["loss"])+1)
         for i, key in enumerate(history.keys()):
@@ -204,7 +204,7 @@ def main():
 
     # Plot sample weights
     if os.path.exists("resample.pickle"):
-        counts, bins, counts_after = pickle.load(open("resample.pickle", "rb"))
+        counts, bins, counts_after = pickle.load(open(save_path+"resample.pickle", "rb"))
         center = bins[:-1] + 0.5 * (bins[1] - bins[0])
         plt.figure(figsize=(6,6))
         plt.plot(center, counts, "o-", lw=3, label="Before")

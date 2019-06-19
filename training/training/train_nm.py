@@ -19,7 +19,7 @@ K.tensorflow_backend.set_session(sess)
 # sess = tf.Session(config=config)
 # K.set_session(sess)
 
-save_path="/local/scratch/ssd2/hborsch/di_tau_mass/DNN/tempsave/"
+save_path="tempsave/"
 
 
 def build_model(inputs, outputs_t):
