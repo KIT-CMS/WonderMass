@@ -59,6 +59,9 @@ void AddP4Branch(TTree *tree, float *v, TString name)
   tree->Branch(name + "_py", v + 1, name + "_py/F");
   tree->Branch(name + "_pz", v + 2, name + "_pz/F");
   tree->Branch(name + "_e", v + 3, name + "_e/F");
+  tree->Branch(name + "_pt", v + 4, name + "_pt/F");
+  tree->Branch(name + "_eta", v + 5, name + "_eta/F");
+  tree->Branch(name + "_phi", v + 6, name + "_phi/F");
 }
 
 void SetP4Values(reco::Candidate::LorentzVector &p4, float *v)
@@ -67,6 +70,9 @@ void SetP4Values(reco::Candidate::LorentzVector &p4, float *v)
   v[1] = p4.py();
   v[2] = p4.pz();
   v[3] = p4.e();
+  v[4] = p4.pt();
+  v[5] = p4.eta();
+  v[6] = p4.phi();
 }
 
 template <typename T>
@@ -145,21 +151,21 @@ class ntupleBuilder : public edm::EDAnalyzer
     // Generator
     // Boson
     TLorentzVector lv_boson_gen;
-    float v_h_gen[4];
+    float v_h_gen[7];
     int v_h_gen_pdgid;
     int v_h_gen_process;
     float v_h_gen_mass;
     // tau
     TLorentzVector lv_tau1_gen, lv_tau2_gen;
-    float v_t1_gen[4];
-    float v_t2_gen[4];
+    float v_t1_gen[7];
+    float v_t2_gen[7];
     // visible tau
     TLorentzVector lv_vistau1_gen, lv_vistau2_gen;
-    float v_t1_genvis[4];
-    float v_t2_genvis[4];
+    float v_t1_genvis[7];
+    float v_t2_genvis[7];
     // MET
     TLorentzVector lv_met_gen;
-    float v_met_gen[4];
+    float v_met_gen[7];
     // Charge
     int t1_gen_q;
     int t2_gen_q;
@@ -170,21 +176,21 @@ class ntupleBuilder : public edm::EDAnalyzer
     // Generator
     // Boson
     TLorentzVector lv_boson_trgen;
-    float v_h_trgen[4];
+    float v_h_trgen[7];
     int v_h_trgen_pdgid;
     int v_h_trgen_process;
     float v_h_trgen_mass;
     // tau
     TLorentzVector lv_tau1_trgen, lv_tau2_trgen;
-    float v_t1_trgen[4];
-    float v_t2_trgen[4];
+    float v_t1_trgen[7];
+    float v_t2_trgen[7];
     // visible tau
     TLorentzVector lv_vistau1_trgen, lv_vistau2_trgen;
-    float v_t1_trgenvis[4];
-    float v_t2_trgenvis[4];
+    float v_t1_trgenvis[7];
+    float v_t2_trgenvis[7];
     // MET
     TLorentzVector lv_met_trgen;
-    float v_met_trgen[4];
+    float v_met_trgen[7];
     // Charge
     int t1_trgen_q;
     int t2_trgen_q;
@@ -194,8 +200,8 @@ class ntupleBuilder : public edm::EDAnalyzer
     // Reco
     // visible tau
     TLorentzVector lv_tau1_rec, lv_tau2_rec;
-    float v_t1_rec[4];
-    float v_t2_rec[4];
+    float v_t1_rec[7];
+    float v_t2_rec[7];
     // Reco MET
     TLorentzVector lv_met_rec;
     float v_met_rec[2];
@@ -401,12 +407,12 @@ class ntupleBuilder : public edm::EDAnalyzer
     void getGen(const reco::GenParticle& gen_tau, int *gen_tau_decay, std::string name)
     {
 
-      std::cout << name << ":" << gen_tau.pdgId() << " :";
-      for (reco::GenParticleRefVector::const_iterator  gen = gen_tau.daughterRefVector().begin(); gen != gen_tau.daughterRefVector().end(); gen++)
-      {
-        std::cout << " " << (*gen)->pdgId() << ";";
-      }
-      std::cout << "\n";
+      // std::cout << name << ":" << gen_tau.pdgId() << " :";
+      // for (reco::GenParticleRefVector::const_iterator  gen = gen_tau.daughterRefVector().begin(); gen != gen_tau.daughterRefVector().end(); gen++)
+      // {
+      //   std::cout << " " << (*gen)->pdgId() << ";";
+      // }
+      // std::cout << "\n";
 
       DecayInfo info;
       walkDecayTree(dynamic_cast<const reco::GenParticle&>(gen_tau), info);
