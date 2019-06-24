@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 # example:
+# parameters taked as input by the run.sh are passed via -t (boson_type0, -m (mass), -n (num_events), -p (args.prefix)
+#
 # test:
 # python generation/python/create_jobs.py -j test_job -n 10 -m 91 -p _test_wm -r 1 -s --submit
 #
