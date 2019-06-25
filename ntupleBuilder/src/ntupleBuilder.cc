@@ -31,6 +31,7 @@
 #include "DataFormats/PatCandidates/interface/Tau.h"
 #include "DataFormats/PatCandidates/interface/Electron.h"
 #include "DataFormats/PatCandidates/interface/Muon.h"
+#include "DataFormats/PatCandidates/interface/Jet.h"
 
 
 typedef ROOT::Math::LorentzVector<ROOT::Math::PtEtaPhiM4D<double> > RMDLV;
@@ -91,6 +92,50 @@ int FindTau(T taus, reco::Candidate::LorentzVector &p4, float min_dr)
     }
   }
   return idx;
+}
+
+
+template <typename T>
+int CountJets(T jets, reco::Candidate::LorentzVector & l1_p4, float min_dr1, reco::Candidate::LorentzVector & l2_p4, float min_dr2)
+{
+  int count = 0;
+  for (auto jet = jets->begin(); jet != jets->end(); jet++)
+  {
+    if (jet->p4().pt() <= 20 || abs(jet->p4().eta()) > 4.7 ) continue;
+    if (deltaR(l1_p4, jet->p4()) <= min_dr1 || deltaR(l2_p4, jet->p4()) <= min_dr2) continue;
+    // Tight ID
+    // TODO:  , do universal ; ID: tight PF Jet ID (https://twiki.cern.ch/twiki/bin/view/CMS/JetID13TeVRun2017#Preliminary_Recommendations_for)
+      if (std::abs(jet->p4().eta()) <= 2.4f)
+      {
+        if (!((jet->neutralHadronEnergyFraction() < 0.90f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.90f) // Neutral EM Fraction
+                && (jet->nConstituents() > 1)
+                && (jet->chargedHadronEnergyFraction() > 0.0)
+                // && (jet->chargedMuEnergyFraction() < 80)
+                && (jet->chargedHadronMultiplicity() > 0))) continue;
+      }
+      else if (std::abs(jet->p4().eta()) > 2.4f && std::abs(jet->p4().eta()) <= 2.7f)
+      {
+        if (!((jet->neutralHadronEnergyFraction() < 0.90f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.90f) // Neutral EM Fraction
+                && (jet->nConstituents() > 1))) continue;
+      }
+      else if (std::abs(jet->p4().eta()) > 2.7f && std::abs(jet->p4().eta()) <= 3.0f)
+      {
+        if (!((jet->photonEnergyFraction() + jet->hoEnergyFraction() > 0.02f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.99f) // Neutral EM Fraction
+                && (jet->nConstituents() - jet->chargedHadronMultiplicity() > 2))) continue;
+      }
+      else if (std::abs(jet->p4().eta()) > 3.0f)
+      {
+        if (!((jet->neutralHadronEnergyFraction() > 0.02f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.90f) // Neutral EM Fraction
+                && (jet->nConstituents() - jet->chargedHadronMultiplicity() > 10))) continue; // Number of neutral particles
+      }
+    count++;
+  }
+
+  return count;
 }
 
 class ntupleBuilder : public edm::EDAnalyzer
@@ -219,11 +264,13 @@ class ntupleBuilder : public edm::EDAnalyzer
     // Charge
     int v_t1_rec_q;
     int v_t2_rec_q;
+    int njets;
 
     // Tokens
     edm::EDGetTokenT<pat::TauCollection> t_taus;
     edm::EDGetTokenT<pat::MuonCollection> t_muons;
     edm::EDGetTokenT<pat::ElectronCollection> t_electrons;
+    edm::EDGetTokenT<pat::JetCollection> t_jets;
     edm::EDGetTokenT<reco::VertexCollection> t_vtx;
 
     edm::EDGetTokenT<pat::METCollection> t_mets;
@@ -272,6 +319,8 @@ class ntupleBuilder : public edm::EDAnalyzer
       // Charge
       tree->Branch("t1_rec_q", &v_t1_rec_q, "t1_rec_q/I");
       tree->Branch("t2_rec_q", &v_t2_rec_q, "t2_rec_q/I");
+      // Jets
+      tree->Branch("njets", &njets, "njets/I");
     }
 
     struct DecayInfo
@@ -561,6 +610,7 @@ ntupleBuilder::ntupleBuilder(const edm::ParameterSet &iConfig)
   t_taus = consumes<pat::TauCollection>(edm::InputTag("slimmedTaus", "", "PAT"));
   t_muons = consumes<pat::MuonCollection>(edm::InputTag("slimmedMuons", "", "PAT"));
   t_electrons = consumes<pat::ElectronCollection>(edm::InputTag("slimmedElectrons", "", "PAT"));
+  t_jets = consumes<pat::JetCollection>(edm::InputTag("slimmedJets", "", "PAT"));
   t_mets = consumes<pat::METCollection>(edm::InputTag("slimmedMETs", "", "PAT"));
   t_vtx = consumes<reco::VertexCollection>(edm::InputTag("offlineSlimmedPrimaryVertices", "", "PAT"));
 
@@ -817,9 +867,10 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
   iEvent.getByToken(t_muons, muons);
   edm::Handle<pat::ElectronCollection> electrons;
   iEvent.getByToken(t_electrons, electrons);
-   edm::Handle<reco::VertexCollection> vtxs;
+  edm::Handle<reco::VertexCollection> vtxs;
   iEvent.getByToken(t_vtx, vtxs);
-
+  edm::Handle<pat::JetCollection> jets;
+  iEvent.getByToken(t_jets, jets);
 
   // Ensure that we have two reconstructed taus
   // int rec_channel = -1; // 3 - tt; 1 - et; 2 - mt
@@ -852,6 +903,7 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
 
   if (expected_rec_channel > 2) // tt channel
   {
+
     // Ensure that we can match both taus to different generator taus
     const float min_dr = 0.3; // Minimum deltaR valid for matching
     const auto idx1 = FindTau(taus, t1_vis_p4, min_dr);
@@ -868,6 +920,12 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
       cutflow->Fill(3);
       return;
     }
+
+    // Reco Jets njets
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> l1, l2;
+      l1.SetPxPyPzE(taus->at(idx1).p4().Px(), taus->at(idx1).p4().Py(), taus->at(idx1).p4().Pz(), taus->at(idx1).p4().E());
+      l2.SetPxPyPzE(taus->at(idx2).p4().Px(), taus->at(idx2).p4().Py(), taus->at(idx2).p4().Pz(), taus->at(idx2).p4().E());
+      njets = CountJets(jets, l1, 0.5, l2, 0.5);
 
     // Ensure that both reco taus have a reconstructed decay mode
     v_t1_rec_dm = taus->at(idx1).decayMode();
@@ -939,6 +997,12 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
         return;
       }
 
+    // Reco Jets njets
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> l1, l2;
+      l1.SetPxPyPzE(muons->at(idx1).p4().Px(), muons->at(idx1).p4().Py(), muons->at(idx1).p4().Pz(), muons->at(idx1).p4().E());
+      l2.SetPxPyPzE(taus->at(idx2).p4().Px(), taus->at(idx2).p4().Py(), taus->at(idx2).p4().Pz(), taus->at(idx2).p4().E());
+      njets = CountJets(jets, l1, 0.5, l2, 0.5);
+
     // Opposite charge
       v_t1_rec_q = muons->at(idx1).charge();
       v_t2_rec_q = taus->at(idx2).charge();
@@ -997,6 +1061,12 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
         cutflow->Fill(3);
         return;
       }
+
+    // Reco Jets njets
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> l1, l2;
+      l1.SetPxPyPzE(electrons->at(idx1).p4().Px(), electrons->at(idx1).p4().Py(), electrons->at(idx1).p4().Pz(), electrons->at(idx1).p4().E());
+      l2.SetPxPyPzE(taus->at(idx2).p4().Px(), taus->at(idx2).p4().Py(), taus->at(idx2).p4().Pz(), taus->at(idx2).p4().E());
+      njets = CountJets(jets, l1, 0.5, l2, 0.5);
 
     // Opposite charge
       v_t1_rec_q = electrons->at(idx1).charge();
