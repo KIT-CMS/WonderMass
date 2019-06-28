@@ -24,10 +24,10 @@ getenv = true
 max_retries = 3
 RequestCpus = 1
 +MaxRuntime = 28800
-notification  = Complete
 transfer_output_files = ""
 queue arguments from arguments.txt\
 """
+# notification  = Complete
 # 1h 3600
 # 8h 28800
 
@@ -115,15 +115,26 @@ def main(args):
     for nickname in args.nicknames:
             print nickname
             print datasets[nickname]
-            output_ntuple = os.path.join(args.output, str(datasets[nickname]['year']), nickname + '.root')
-            tmp_output_ntuple = os.path.join(args.output_tmp, str(datasets[nickname]['year']), nickname + '.root')
-            for obj in [output_ntuple, tmp_output_ntuple]:
-                if os.path.exists(obj) and not args.force:
-                    print(obj + ' exist and overriten is not set')
-                    exit(1)
+            base_output_dir = args.output.split('/')[-1]
+            output_ntuple_path = os.path.join(args.output, str(datasets[nickname]['year']))
+            tmp_output_ntuple_path = os.path.join(args.output_tmp, base_output_dir, str(datasets[nickname]['year']))
+            output_ntuple = os.path.join(output_ntuple_path, nickname + '.root')
+            tmp_output_ntuple = os.path.join(tmp_output_ntuple_path, nickname + '.root')
 
-            mkdir(os.path.join(args.output_tmp, str(datasets[nickname]['year'])))
-            mkdir(os.path.join(args.output, str(datasets[nickname]['year'])))
+            skip = False
+            for obj in [output_ntuple, tmp_output_ntuple]:
+                if os.path.exists(obj):
+                    if args.force:
+                        os.remove(obj)
+                    else:
+                        print(obj + ' exist and overriten is not set : SKIPPED')
+                        skip = True
+                        break
+            if skip:
+                continue
+
+            mkdir(os.path.join(tmp_output_ntuple_path))
+            mkdir(os.path.join(output_ntuple_path))
             # get the list of input files for the dataset
             from dbs.apis.dbsClient import DbsApi
             url = "https://cmsweb.cern.ch/dbs/prod/global/DBSReader"
@@ -207,11 +218,11 @@ def main(args):
         os.chdir(jobdir)
         import subprocess
         subprocess.call('pwd', shell=True)
-        print 'ls'
+        print '\n >>> ls jobdir'
         subprocess.call('ls', shell=True)
-        print 'cat'
+        print '\n >>> cat job.jdl'
         subprocess.call('cat job.jdl', shell=True)
-        print 'run'
+        print '\n >>> run'
         subprocess.call('condor_submit job.jdl', shell=True)
 
 
