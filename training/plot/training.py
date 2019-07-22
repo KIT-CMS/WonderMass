@@ -17,11 +17,9 @@ import tensorflow as tf
 gpu_options = tf.GPUOptions(allow_growth=True)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 K.tensorflow_backend.set_session(sess)
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth=True
-# sess = tf.Session(config=config)
-# K.set_session(sess)
-save_path="tempsave/"
+
+#save_path="tempsave/"
+save_path="saved_models/saves_false_train_old/"
 
 def main():
     # Load data
@@ -36,8 +34,8 @@ def main():
     # Load model
     def dummy(y_true, y_pred):
         return y_pred[:,0]
-    copyfile("model.h5", "model_copy.h5")
-    model = load_model("model_copy.h5",
+    copyfile(save_path+"model.h5", save_path+"model_copy.h5")
+    model = load_model(save_path+"model_copy.h5",
             custom_objects={
                 "mass_t_loss": dummy,
                 "mass_h_loss": dummy,
@@ -61,7 +59,7 @@ def main():
                            })
 
     # Plot model
-    plot_model(model, to_file="model.png")
+    #plot_model(model, to_file="model.png")
 
     # Split data
     #x_train, x_val, y_train, y_val = \

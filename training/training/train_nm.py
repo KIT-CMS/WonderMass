@@ -25,7 +25,7 @@ save_path="tempsave/"
 def build_model(inputs, outputs_t):
     nodes = 500
     num_layer = 4
-    activation = "relu"
+    activation = "elu"
     l2reg = None#l2(1e-2)
     #drop_p = 0.3
 
@@ -159,6 +159,26 @@ def main():
                         shuffle=True, verbose=1)
 
     pickle.dump({h: history.history[h] for h in history.history}, open(save_path+"history.pickle", "wb"))
+
+    #save prediction of masses for test dataset, is used for the plotting_results.py script
+    p = model.predict(x_val)
+    pred = {}
+    truth = {}
+    for i, k in enumerate(outputs_t):
+        pred[k] = p[:,i]
+        truth[k] = y_val[:,i]
+
+    tau_mass=1.77
+    for d in [pred, truth]:
+         for i in ["1", "2"]:
+             d["t%s_gen_e"%i] = np.sqrt(tau_mass**2 + d["t%s_gen_px"%i]**2 + d["t%s_gen_py"%i]**2 + d["t%s_gen_pz"%i]**2)
+         for k in ["px", "py", "pz", "e"]:
+             d["h_gen_%s"%k] = d["t1_gen_%s"%k] + d["t2_gen_%s"%k]
+         d["h_gen_mass"] = np.sqrt(np.abs(d["h_gen_e"]**2 - d["h_gen_px"]**2\
+                                            - d["h_gen_py"]**2 - d["h_gen_pz"]**2))
+
+    np.save(open(save_path+"mass_test_true","wb"),truth["h_gen_mass"])
+    np.save(open(save_path+"mass_test_pred","wb"),pred["h_gen_mass"])
 
 
 if __name__ == "__main__":

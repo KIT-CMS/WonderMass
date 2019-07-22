@@ -25,17 +25,16 @@ save_path="tempsave/"
 def build_model(inputs):
     nodes = 500
     num_layer = 4
-    activation = "relu"
+    activation = "elu"
     l2reg = None#l2(1e-2)
-    #drop_p = 0.3
-
+    drop_p = 0.3
     # Main network
     inputs_a = Input(shape=(len(inputs),))
     net = inputs_a
     for i in range(num_layer):
         net = Dense(nodes, activation=activation, kernel_regularizer=l2reg)(net)
         net = BatchNormalization()(net)
-        #net = Dropout(drop_p)(net)
+        net = Dropout(drop_p)(net)
     f = Dense(1, activation="linear", name="f")(net)
 
     model = Model(inputs=(inputs_a), outputs=f)
@@ -57,8 +56,6 @@ def compile_model(model):
 def main():
     x_train = np.load(open(save_path+"x_train_resampled.npy", "rb"))
     x_val = np.load(open(save_path+"x_test_resampled.npy", "rb"))
-    #y_train = np.load(open(save_path+"y_t_train_resampled.npy", "rb"))
-    #y_val = np.load(open(save_path+"y_t_test_resampled.npy", "rb"))
     mass_train=np.load(open(save_path+"mass_train_npy","rb"))
     mass_val=np.load(open(save_path+"mass_test_npy","rb"))
 
@@ -75,13 +72,17 @@ def main():
     history = model.fit(x_train, mass_train,
                         validation_data=(x_val, mass_val),
                         batch_size=10000, epochs=10000,
-                        callbacks=[EarlyStopping(patience=50),
+                        callbacks=[EarlyStopping(patience=100),
                                    ModelCheckpoint(
                                        filepath=save_path+"model.h5", save_best_only=True, verbose=1)],
                         shuffle=True, verbose=1)
 
     pickle.dump({h: history.history[h] for h in history.history}, open(save_path+"history.pickle", "wb"))
 
+    #save mass prediction for test dataset
+    predict=np.array(model.predict(x_val))
+    predict=np.squeeze(predict)
+    np.save(open(save_path+"mass_test_pred","wb"),predict)
 
 if __name__ == "__main__":
     main()

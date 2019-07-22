@@ -7,7 +7,9 @@ import os
 from functools import partial
 
 
-path = "output.root"
+path = "MSSM_merged.root"
+tree_name="Events_tt"
+
 save_path="tempsave/"
 
 def resample(x):
@@ -82,7 +84,10 @@ def resample_new(x):
     plt.plot(bins[0:20]+(bins[1]-bins[0])/2,counts,".")
     plt.savefig("testhist.png")
     """
-    bins=np.linspace(p[0],p[1],num=41)
+    #binning the masses and finding the corresponding indices to later be able to clone events with certain indices_res
+    #should be made quicker...
+    #bins=np.linspace(p[0],p[1],num=41)
+    bins=np.linspace(p[0],p[1],num=321)
     #print(bins)
     indices=[]
     masses=[]
@@ -100,16 +105,11 @@ def resample_new(x):
     for indexlist in indices:
         if len(indexlist)>count:
             count=len(indexlist)
-    print(count)
+    print("maximum samplenumber per bin=",count)
     indices_res=[]
     for indexlist in indices:
         a=indexlist
-        while len(a)<count-1000:
-            a+=list(np.random.choice(indexlist,1000))
-        while len(a)<count-100:
-            a+=list(np.random.choice(indexlist,100))
-        while len(a)<count:
-            a+=list(np.random.choice(indexlist,1))
+        a+=list(np.random.choice(indexlist,count-len(a)))
         indices_res+=a
 
     print("Min/max resampling mass range: {}/{}".format(p[0], p[-1]))
@@ -127,6 +127,33 @@ def resample_new(x):
     counts_after, _ = np.histogram(m[idx_re], bins=bins)
     pickle.dump([counts, bins, counts_after], open(save_path+"resample.pickle", "wb"))
     """
+    return idx_re, idx_train_re, idx_test_re, m
+
+def no_resample(x):
+    px1 = x[:, 0]
+    py1 = x[:, 1]
+    pz1 = x[:, 2]
+    px2 = x[:, 3]
+    py2 = x[:, 4]
+    pz2 = x[:, 5]
+    m_t = 1.77
+    e1 = np.sqrt(m_t**2 + px1**2 + py1**2 + pz1**2)
+    e2 = np.sqrt(m_t**2 + px2**2 + py2**2 + pz2**2)
+    px = px1 + px2
+    py = py1 + py2
+    pz = pz1 + pz2
+    e = e1 + e2
+    m = np.sqrt(e**2 - px**2 - py**2 - pz**2)
+
+    indices_res=range(len(m))
+
+    from sklearn.model_selection import train_test_split
+    idx_re = np.array(indices_res)
+    #idx_train_re,idx_test_re = train_test_split(idx_re, train_size=0.8, random_state=1234)
+    idx_train_re,idx_test_re = train_test_split(idx_re, train_size=0.8, random_state=1234)
+    idx_train_re=np.array(idx_train_re)
+    idx_test_re=np.array(idx_test_re)
+
     return idx_re, idx_train_re, idx_test_re, m
 
 
@@ -148,7 +175,8 @@ def main():
 
     # Load data
     data = {}
-    tree = uproot.open(path)["ntupleBuilder"]["Events"].arrays()
+    #tree = uproot.open(path)[tree_name].arrays()
+    tree = uproot.open(path)["ntupleBuilder"][tree_name].arrays()
     for b in tree:
         data[b.decode("utf-8")] = tree[b]
 
@@ -157,13 +185,19 @@ def main():
     y_n = np.vstack([data[key] for key in outputs_n]).T
     y_t = np.vstack([data[key] for key in outputs_t]).T
     y_h = np.vstack([data[key] for key in outputs_h]).T
+    m=data["h_gen_mass"]
 
-    # Resample events to flat mass
-    idx, idx_train, idx_test, m = resample_new(y_t)
+
+
+
+    # Resample events to flat mass with resample,resmaple_new or do not resample with no_resample
+    idx, idx_train, idx_test, m = no_resample(y_t)
     x_resampled = x[idx]
     y_t_resampled = y_t[idx]
     print("x: Before/after resampling: {} / {}".format(x.shape, x_resampled.shape))
     print("y_t: Before/after resampling: {} / {}".format(y_t.shape, y_t_resampled.shape))
+
+
 
     # Save to disk
     np.save(open(save_path+"x.npy", "wb"), x)
