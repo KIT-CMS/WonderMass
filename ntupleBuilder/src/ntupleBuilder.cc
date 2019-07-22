@@ -25,11 +25,14 @@
 #include "TTree.h"
 #include "TLorentzVector.h"
 
-
 #include "DataFormats/Math/interface/LorentzVector.h"
 #include "DataFormats/Math/interface/deltaR.h"
 #include "DataFormats/PatCandidates/interface/MET.h"
 #include "DataFormats/PatCandidates/interface/Tau.h"
+#include "DataFormats/PatCandidates/interface/Electron.h"
+#include "DataFormats/PatCandidates/interface/Muon.h"
+#include "DataFormats/PatCandidates/interface/Jet.h"
+
 
 typedef ROOT::Math::LorentzVector<ROOT::Math::PtEtaPhiM4D<double> > RMDLV;
 
@@ -53,12 +56,16 @@ void subtractInvisible(reco::Candidate::LorentzVector &p4, T &x)
   }
 }
 
+
 void AddP4Branch(TTree *tree, float *v, TString name)
 {
   tree->Branch(name + "_px", v + 0, name + "_px/F");
   tree->Branch(name + "_py", v + 1, name + "_py/F");
   tree->Branch(name + "_pz", v + 2, name + "_pz/F");
   tree->Branch(name + "_e", v + 3, name + "_e/F");
+  tree->Branch(name + "_pt", v + 4, name + "_pt/F");
+  tree->Branch(name + "_eta", v + 5, name + "_eta/F");
+  tree->Branch(name + "_phi", v + 6, name + "_phi/F");
 }
 
 void SetP4Values(reco::Candidate::LorentzVector &p4, float *v)
@@ -67,6 +74,9 @@ void SetP4Values(reco::Candidate::LorentzVector &p4, float *v)
   v[1] = p4.py();
   v[2] = p4.pz();
   v[3] = p4.e();
+  v[4] = p4.pt();
+  v[5] = p4.eta();
+  v[6] = p4.phi();
 }
 
 template <typename T>
@@ -82,6 +92,50 @@ int FindTau(T taus, reco::Candidate::LorentzVector &p4, float min_dr)
     }
   }
   return idx;
+}
+
+
+template <typename T>
+int CountJets(T jets, reco::Candidate::LorentzVector & l1_p4, float min_dr1, reco::Candidate::LorentzVector & l2_p4, float min_dr2)
+{
+  int count = 0;
+  for (auto jet = jets->begin(); jet != jets->end(); jet++)
+  {
+    if (jet->p4().pt() <= 20 || abs(jet->p4().eta()) > 4.7 ) continue;
+    if (deltaR(l1_p4, jet->p4()) <= min_dr1 || deltaR(l2_p4, jet->p4()) <= min_dr2) continue;
+    // Tight ID
+    // TODO:  , do universal ; ID: tight PF Jet ID (https://twiki.cern.ch/twiki/bin/view/CMS/JetID13TeVRun2017#Preliminary_Recommendations_for)
+      if (std::abs(jet->p4().eta()) <= 2.4f)
+      {
+        if (!((jet->neutralHadronEnergyFraction() < 0.90f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.90f) // Neutral EM Fraction
+                && (jet->nConstituents() > 1)
+                && (jet->chargedHadronEnergyFraction() > 0.0)
+                // && (jet->chargedMuEnergyFraction() < 80)
+                && (jet->chargedHadronMultiplicity() > 0))) continue;
+      }
+      else if (std::abs(jet->p4().eta()) > 2.4f && std::abs(jet->p4().eta()) <= 2.7f)
+      {
+        if (!((jet->neutralHadronEnergyFraction() < 0.90f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.90f) // Neutral EM Fraction
+                && (jet->nConstituents() > 1))) continue;
+      }
+      else if (std::abs(jet->p4().eta()) > 2.7f && std::abs(jet->p4().eta()) <= 3.0f)
+      {
+        if (!((jet->photonEnergyFraction() + jet->hoEnergyFraction() > 0.02f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.99f) // Neutral EM Fraction
+                && (jet->nConstituents() - jet->chargedHadronMultiplicity() > 2))) continue;
+      }
+      else if (std::abs(jet->p4().eta()) > 3.0f)
+      {
+        if (!((jet->neutralHadronEnergyFraction() > 0.02f)
+                && (jet->photonEnergyFraction() + jet->hoEnergyFraction() < 0.90f) // Neutral EM Fraction
+                && (jet->nConstituents() - jet->chargedHadronMultiplicity() > 10))) continue; // Number of neutral particles
+      }
+    count++;
+  }
+
+  return count;
 }
 
 class ntupleBuilder : public edm::EDAnalyzer
@@ -102,6 +156,9 @@ class ntupleBuilder : public edm::EDAnalyzer
     bool debug;
     bool baseline;
     TTree *tree;
+    TTree *tree_tt;
+    TTree *tree_mt;
+    TTree *tree_et;
     TTree *tree_gen;
     TH1I *cutflow;
     static const Int_t nx = 8;
@@ -145,21 +202,21 @@ class ntupleBuilder : public edm::EDAnalyzer
     // Generator
     // Boson
     TLorentzVector lv_boson_gen;
-    float v_h_gen[4];
+    float v_h_gen[7];
     int v_h_gen_pdgid;
     int v_h_gen_process;
     float v_h_gen_mass;
     // tau
     TLorentzVector lv_tau1_gen, lv_tau2_gen;
-    float v_t1_gen[4];
-    float v_t2_gen[4];
+    float v_t1_gen[7];
+    float v_t2_gen[7];
     // visible tau
     TLorentzVector lv_vistau1_gen, lv_vistau2_gen;
-    float v_t1_genvis[4];
-    float v_t2_genvis[4];
+    float v_t1_genvis[7];
+    float v_t2_genvis[7];
     // MET
     TLorentzVector lv_met_gen;
-    float v_met_gen[4];
+    float v_met_gen[7];
     // Charge
     int t1_gen_q;
     int t2_gen_q;
@@ -168,23 +225,24 @@ class ntupleBuilder : public edm::EDAnalyzer
     int t2_gen_dm;
 
     // Generator
+    int expected_rec_channel;
     // Boson
     TLorentzVector lv_boson_trgen;
-    float v_h_trgen[4];
+    float v_h_trgen[7];
     int v_h_trgen_pdgid;
     int v_h_trgen_process;
     float v_h_trgen_mass;
     // tau
     TLorentzVector lv_tau1_trgen, lv_tau2_trgen;
-    float v_t1_trgen[4];
-    float v_t2_trgen[4];
+    float v_t1_trgen[7];
+    float v_t2_trgen[7];
     // visible tau
     TLorentzVector lv_vistau1_trgen, lv_vistau2_trgen;
-    float v_t1_trgenvis[4];
-    float v_t2_trgenvis[4];
+    float v_t1_trgenvis[7];
+    float v_t2_trgenvis[7];
     // MET
     TLorentzVector lv_met_trgen;
-    float v_met_trgen[4];
+    float v_met_trgen[7];
     // Charge
     int t1_trgen_q;
     int t2_trgen_q;
@@ -192,10 +250,11 @@ class ntupleBuilder : public edm::EDAnalyzer
     int t2_trgen_flav;
 
     // Reco
+    int channel_rec;
     // visible tau
     TLorentzVector lv_tau1_rec, lv_tau2_rec;
-    float v_t1_rec[4];
-    float v_t2_rec[4];
+    float v_t1_rec[7];
+    float v_t2_rec[7];
     // Reco MET
     TLorentzVector lv_met_rec;
     float v_met_rec[2];
@@ -205,11 +264,64 @@ class ntupleBuilder : public edm::EDAnalyzer
     // Charge
     int v_t1_rec_q;
     int v_t2_rec_q;
+    int njets;
 
     // Tokens
     edm::EDGetTokenT<pat::TauCollection> t_taus;
+    edm::EDGetTokenT<pat::MuonCollection> t_muons;
+    edm::EDGetTokenT<pat::ElectronCollection> t_electrons;
+    edm::EDGetTokenT<pat::JetCollection> t_jets;
+    edm::EDGetTokenT<reco::VertexCollection> t_vtx;
+
     edm::EDGetTokenT<pat::METCollection> t_mets;
     edm::EDGetTokenT<reco::GenParticleCollection> t_gens;
+
+    void AddTreeBranches(TTree *tree)
+    {
+      // Event information
+      tree->Branch("run", &v_run);
+      tree->Branch("luminosityBlock", &v_lumi_block);
+      tree->Branch("event", &v_event);
+      // Event tree
+      //// Gen
+      tree->Branch("expected_rec_channel", &expected_rec_channel, "expected_rec_channel/I");
+      tree->Branch("t1_gen_q", &t1_gen_q, "t1_gen_q/I");
+      tree->Branch("t2_gen_q", &t2_gen_q, "t2_gen_q/I");
+      tree->Branch("t1_gen_flav", &t1_gen_flav, "t1_gen_flav/I");
+      tree->Branch("t2_gen_flav", &t2_gen_flav, "t2_gen_flav/I");
+      tree->Branch("lv_boson_gen", &lv_boson_gen);
+      tree->Branch("lv_tau1_gen", &lv_tau1_gen);
+      tree->Branch("lv_tau2_gen", &lv_tau2_gen);
+      tree->Branch("lv_vistau1_gen", &lv_vistau1_gen);
+      tree->Branch("lv_vistau2_gen", &lv_vistau2_gen);
+      tree->Branch("lv_met_gen", &lv_met_gen);
+      AddP4Branch(tree, v_t1_gen, "t1_gen");
+      AddP4Branch(tree, v_t2_gen, "t2_gen");
+      AddP4Branch(tree, v_t1_genvis, "t1_genvis");
+      AddP4Branch(tree, v_t2_genvis, "t2_genvis");
+      AddP4Branch(tree, v_met_gen, "met_gen");
+      AddP4Branch(tree, v_h_gen, "h_gen");
+      tree->Branch("h_gen_pdgid", &v_h_gen_pdgid, "h_gen_pdgid/I");
+      tree->Branch("h_gen_mass", &v_h_gen_mass, "h_gen_mass/F");
+      tree->Branch("h_gen_process", &v_h_gen_process, "h_gen_process/I");
+      //// Rec
+      tree->Branch("channel_rec", &channel_rec, "channel_rec/I");
+      tree->Branch("lv_tau1_rec", &lv_tau1_rec);
+      tree->Branch("lv_tau2_rec", &lv_tau2_rec);
+      tree->Branch("lv_met_rec", &lv_met_rec);
+      AddP4Branch(tree, v_t1_rec, "t1_rec");
+      AddP4Branch(tree, v_t2_rec, "t2_rec");
+      tree->Branch("met_rec_px", v_met_rec + 0, "met_rec_px/F");
+      tree->Branch("met_rec_py", v_met_rec + 1, "met_rec_py/F");
+      // Decay modes
+      tree->Branch("t1_rec_dm", &v_t1_rec_dm, "t1_rec_dm/I");
+      tree->Branch("t2_rec_dm", &v_t2_rec_dm, "t2_rec_dm/I");
+      // Charge
+      tree->Branch("t1_rec_q", &v_t1_rec_q, "t1_rec_q/I");
+      tree->Branch("t2_rec_q", &v_t2_rec_q, "t2_rec_q/I");
+      // Jets
+      tree->Branch("njets", &njets, "njets/I");
+    }
 
     struct DecayInfo
     {
@@ -218,6 +330,7 @@ class ntupleBuilder : public edm::EDAnalyzer
       DecayInfo(): p4_vis(0,0,0,0), mode(Hadronic), n_charged(0) {}
 
       RMDLV p4_vis;
+
       enum { Electronic, Muonic, Hadronic } mode;
       unsigned int n_charged;
     };
@@ -398,15 +511,15 @@ class ntupleBuilder : public edm::EDAnalyzer
       return Nakt>=1 && qqBar == 2;
     }
 
-    void getGen(const reco::GenParticle& gen_tau, int *gen_tau_decay, std::string name)
+    DecayInfo getGen(const reco::GenParticle& gen_tau, int *gen_tau_decay, std::string name)
     {
 
-      std::cout << name << ":" << gen_tau.pdgId() << " :";
-      for (reco::GenParticleRefVector::const_iterator  gen = gen_tau.daughterRefVector().begin(); gen != gen_tau.daughterRefVector().end(); gen++)
-      {
-        std::cout << " " << (*gen)->pdgId() << ";";
-      }
-      std::cout << "\n";
+      // std::cout << name << ":" << gen_tau.pdgId() << " :";
+      // for (reco::GenParticleRefVector::const_iterator  gen = gen_tau.daughterRefVector().begin(); gen != gen_tau.daughterRefVector().end(); gen++)
+      // {
+      //   std::cout << " " << (*gen)->pdgId() << ";";
+      // }
+      // std::cout << "\n";
 
       DecayInfo info;
       walkDecayTree(dynamic_cast<const reco::GenParticle&>(gen_tau), info);
@@ -414,9 +527,11 @@ class ntupleBuilder : public edm::EDAnalyzer
       {
         case DecayInfo::Electronic:
           *gen_tau_decay = 1;
+          return info;
           break;
         case DecayInfo::Muonic:
           *gen_tau_decay = 2;
+          return info;
           break;
         case DecayInfo::Hadronic:
           if(info.n_charged == 1)
@@ -427,9 +542,11 @@ class ntupleBuilder : public edm::EDAnalyzer
             *gen_tau_decay = 5;
           }
           // TODO: Can this happen?
+          return info;
           break;
         default:
           assert(false);
+          return info;
           break;
       }
     }
@@ -445,6 +562,9 @@ ntupleBuilder::ntupleBuilder(const edm::ParameterSet &iConfig)
   edm::Service<TFileService> fs;
 
   tree = fs->make<TTree>("Events", "Events");
+  tree_et = fs->make<TTree>("Events_et", "Events_et");
+  tree_mt = fs->make<TTree>("Events_mt", "Events_mt");
+  tree_tt = fs->make<TTree>("Events_tt", "Events_tt");
   tree_gen = fs->make<TTree>("GenEvents", "GenEvents");
   cutflow = fs->make<TH1I>( "cutflow"  , "cutflow", nx,  0, nx );
   for (int i = 1; i <= nx; i++) cutflow->GetXaxis()->SetBinLabel(i, cuts[i - 1]);
@@ -473,6 +593,7 @@ ntupleBuilder::ntupleBuilder(const edm::ParameterSet &iConfig)
   AddP4Branch(tree_gen, v_t2_trgenvis, "t2_genvis");
   AddP4Branch(tree_gen, v_met_trgen, "met_gen");
   AddP4Branch(tree_gen, v_h_trgen, "h_gen");
+  tree_gen->Branch("expected_rec_channel", &expected_rec_channel, "expected_rec_channel/I");
   tree_gen->Branch("h_gen_pdgid", &v_h_trgen_pdgid, "h_gen_pdgid/I");
   tree_gen->Branch("h_gen_mass", &v_h_trgen_mass, "h_gen_mass/F");
   tree_gen->Branch("h_gen_process", &v_h_trgen_process, "h_gen_process/I");
@@ -480,49 +601,19 @@ ntupleBuilder::ntupleBuilder(const edm::ParameterSet &iConfig)
   // tree_cutflow = fs->make<TTree>("Cutflow", "Cutflow");
   // tree_cutflow->Branch("cutflow", &cutflow, "cutflow/I");
 
-  // Event information
-  tree->Branch("run", &v_run);
-  tree->Branch("luminosityBlock", &v_lumi_block);
-  tree->Branch("event", &v_event);
-  // Event tree
-  //// Gen
-  tree->Branch("t1_gen_q", &t1_gen_q, "t1_gen_q/I");
-  tree->Branch("t2_gen_q", &t2_gen_q, "t2_gen_q/I");
-  tree->Branch("t1_gen_flav", &t1_gen_flav, "t1_gen_flav/I");
-  tree->Branch("t2_gen_flav", &t2_gen_flav, "t2_gen_flav/I");
-  tree->Branch("lv_boson_gen", &lv_boson_gen);
-  tree->Branch("lv_tau1_gen", &lv_tau1_gen);
-  tree->Branch("lv_tau2_gen", &lv_tau2_gen);
-  tree->Branch("lv_vistau1_gen", &lv_vistau1_gen);
-  tree->Branch("lv_vistau2_gen", &lv_vistau2_gen);
-  tree->Branch("lv_met_gen", &lv_met_gen);
-  AddP4Branch(tree, v_t1_gen, "t1_gen");
-  AddP4Branch(tree, v_t2_gen, "t2_gen");
-  AddP4Branch(tree, v_t1_genvis, "t1_genvis");
-  AddP4Branch(tree, v_t2_genvis, "t2_genvis");
-  AddP4Branch(tree, v_met_gen, "met_gen");
-  AddP4Branch(tree, v_h_gen, "h_gen");
-  tree->Branch("h_gen_pdgid", &v_h_gen_pdgid, "h_gen_pdgid/I");
-  tree->Branch("h_gen_mass", &v_h_gen_mass, "h_gen_mass/F");
-  tree->Branch("h_gen_process", &v_h_gen_process, "h_gen_process/I");
-  //// Rec
-  tree->Branch("lv_tau1_rec", &lv_tau1_rec);
-  tree->Branch("lv_tau2_rec", &lv_tau2_rec);
-  tree->Branch("lv_met_rec", &lv_met_rec);
-  AddP4Branch(tree, v_t1_rec, "t1_rec");
-  AddP4Branch(tree, v_t2_rec, "t2_rec");
-  tree->Branch("met_rec_px", v_met_rec + 0, "met_rec_px/F");
-  tree->Branch("met_rec_py", v_met_rec + 1, "met_rec_py/F");
-  // Decay modes
-  tree->Branch("t1_rec_dm", &v_t1_rec_dm, "t1_rec_dm/I");
-  tree->Branch("t2_rec_dm", &v_t2_rec_dm, "t2_rec_dm/I");
-  // Charge
-  tree->Branch("t1_rec_q", &v_t1_rec_q, "t1_rec_q/I");
-  tree->Branch("t2_rec_q", &v_t2_rec_q, "t2_rec_q/I");
+  AddTreeBranches(tree);
+  AddTreeBranches(tree_tt);
+  AddTreeBranches(tree_mt);
+  AddTreeBranches(tree_et);
 
   // Consumers
   t_taus = consumes<pat::TauCollection>(edm::InputTag("slimmedTaus", "", "PAT"));
+  t_muons = consumes<pat::MuonCollection>(edm::InputTag("slimmedMuons", "", "PAT"));
+  t_electrons = consumes<pat::ElectronCollection>(edm::InputTag("slimmedElectrons", "", "PAT"));
+  t_jets = consumes<pat::JetCollection>(edm::InputTag("slimmedJets", "", "PAT"));
   t_mets = consumes<pat::METCollection>(edm::InputTag("slimmedMETs", "", "PAT"));
+  t_vtx = consumes<reco::VertexCollection>(edm::InputTag("offlineSlimmedPrimaryVertices", "", "PAT"));
+
   t_gens = consumes<reco::GenParticleCollection>(edm::InputTag("prunedGenParticles", "", "PAT"));
 }
 
@@ -614,9 +705,7 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
   t1_gen_flav = gen_t1->pdgId();
   t2_gen_flav = gen_t2->pdgId();
 
-
-  if (t1_gen_q == t2_gen_q)
-    throw std::runtime_error("Generator taus have same charge.");
+  if (t1_gen_q == t2_gen_q) throw std::runtime_error("Generator taus have same charge.");
 
   // Get four-vector of visible tau components
   return_flag = false;
@@ -657,22 +746,22 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
   lv_vistau2_gen.SetPxPyPzE(t2_vis_p4.Px(),t2_vis_p4.Py(),t2_vis_p4.Pz(),t2_vis_p4.E());
 
   // Reconstructed MET
-  edm::Handle<pat::METCollection> mets;
-  iEvent.getByToken(t_mets, mets);
+    edm::Handle<pat::METCollection> mets;
+    iEvent.getByToken(t_mets, mets);
 
-  if (mets->size() != 1)
-    throw std::runtime_error("Found no MET.");
-  if (mets->at(0).isPFMET() == false)
-    throw std::runtime_error("MET is no PFMet.");
+    if (mets->size() != 1)
+      throw std::runtime_error("Found no MET.");
+    if (mets->at(0).isPFMET() == false)
+      throw std::runtime_error("MET is no PFMet.");
 
-  v_met_rec[0] = mets->at(0).corPx();
-  v_met_rec[1] = mets->at(0).corPy();
-  lv_met_rec.SetPxPyPzE(v_met_rec[0], v_met_rec[1], 0, 0);
+    v_met_rec[0] = mets->at(0).corPx();
+    v_met_rec[1] = mets->at(0).corPy();
+    lv_met_rec.SetPxPyPzE(v_met_rec[0], v_met_rec[1], 0, 0);
+
   // Generator MET
-  auto gen_met_p4 = mets->at(0).genMET()->p4();
-  SetP4Values(gen_met_p4, v_met_gen);
-  lv_met_gen.SetPxPyPzE(gen_met_p4.Px(), gen_met_p4.Py(), gen_met_p4.Pz(), gen_met_p4.E());
-
+    auto gen_met_p4 = mets->at(0).genMET()->p4();
+    SetP4Values(gen_met_p4, v_met_gen);
+    lv_met_gen.SetPxPyPzE(gen_met_p4.Px(), gen_met_p4.Py(), gen_met_p4.Pz(), gen_met_p4.E());
 
   if (std::abs(gen_t1->pdgId()) == 11 && std::abs(gen_t2->pdgId()) == 11) gen_z_decay = 1; // Z->ee
   else if (std::abs(gen_t1->pdgId()) == 13 && std::abs(gen_t2->pdgId()) == 13) gen_z_decay = 2; // Z->mumu
@@ -681,8 +770,74 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
 
   gen_tau1_decay = -1;
   gen_tau2_decay = -1;
-  getGen(dynamic_cast<const reco::GenParticle&>(*gen_t1), &gen_tau1_decay, "tau1");
-  getGen(dynamic_cast<const reco::GenParticle&>(*gen_t2), &gen_tau2_decay, "tau2");
+  DecayInfo t1_p4_vis = getGen(dynamic_cast<const reco::GenParticle&>(*gen_t1), &gen_tau1_decay, "tau1");
+  DecayInfo t2_p4_vis = getGen(dynamic_cast<const reco::GenParticle&>(*gen_t2), &gen_tau2_decay, "tau2");
+  // Find which channel is it on gen level
+  expected_rec_channel = -1;
+  if (gen_tau1_decay == 1 && gen_tau2_decay > 2) // gen et
+  {
+    expected_rec_channel = 1;
+  }
+  else if (gen_tau1_decay > 2 && gen_tau2_decay == 1) // gen et, switch lepton order
+  {
+    expected_rec_channel = 1;
+
+    std::swap(gen_t1, gen_t2);
+    std::swap(t1_gen_p4, t2_gen_p4);
+    std::swap(t1_gen_q, t2_gen_q);
+    std::swap(t1_gen_flav, t2_gen_flav);
+    std::swap(t1_vis_p4, t2_vis_p4);
+    std::swap(gen_tau1_decay, gen_tau2_decay);
+
+    std::swap(lv_tau1_gen, lv_tau2_gen);
+    std::swap(lv_vistau1_gen, lv_vistau2_gen);
+    std::swap(v_t1_gen, v_t2_gen);
+    std::swap(v_t1_genvis, v_t2_genvis);
+
+    std::swap(t1_p4_vis, t2_p4_vis);
+  }
+  else if (gen_tau1_decay == 2 && gen_tau2_decay > 2) // gen mt
+  {
+    expected_rec_channel = 2;
+  }
+  else if (gen_tau1_decay > 2 && gen_tau2_decay == 2) // gen mt, switch lepton order
+  {
+    expected_rec_channel = 2;
+    std::swap(gen_t1, gen_t2);
+    std::swap(t1_gen_p4, t2_gen_p4);
+    std::swap(t1_gen_q, t2_gen_q);
+    std::swap(t1_gen_flav, t2_gen_flav);
+    std::swap(t1_vis_p4, t2_vis_p4);
+    std::swap(gen_tau1_decay, gen_tau2_decay);
+
+    std::swap(lv_tau1_gen, lv_tau2_gen);
+    std::swap(lv_vistau1_gen, lv_vistau2_gen);
+    std::swap(v_t1_gen, v_t2_gen);
+    std::swap(v_t1_genvis, v_t2_genvis);
+
+    std::swap(t1_p4_vis, t2_p4_vis);
+  }
+  else if (gen_tau1_decay > 2 && gen_tau2_decay > 2) // get tt
+  {
+    expected_rec_channel = 3;
+  }
+  else if ((gen_tau1_decay == 2 && gen_tau2_decay == 1) || (gen_tau1_decay == 1 && gen_tau2_decay == 2))
+  {
+    std::cout << "Skip em\n";
+    expected_rec_channel = -1;
+  }
+  else if ((gen_tau1_decay == gen_tau2_decay ) && (gen_tau1_decay == 1 || gen_tau1_decay == 2))
+  {
+    std::cout << "Skip ee, mm\n";
+    expected_rec_channel = -1;
+  }
+  else
+  {
+    std::cout << "Couldn't resolve real channel:\n";
+    std::cout << "gen_tau1_decay:" << gen_tau1_decay << "\n";
+    std::cout << "gen_tau2_decay:" << gen_tau2_decay << "\n";
+    assert(false);
+  }
   t1_trgen_q = t1_gen_q;
   t2_trgen_q = t2_gen_q;
   t1_trgen_flav = t1_gen_flav;
@@ -708,132 +863,261 @@ void ntupleBuilder::analyze(const edm::Event &iEvent, const edm::EventSetup &iSe
   // Reconstructed taus
   edm::Handle<pat::TauCollection> taus;
   iEvent.getByToken(t_taus, taus);
+  edm::Handle<pat::MuonCollection> muons;
+  iEvent.getByToken(t_muons, muons);
+  edm::Handle<pat::ElectronCollection> electrons;
+  iEvent.getByToken(t_electrons, electrons);
+  edm::Handle<reco::VertexCollection> vtxs;
+  iEvent.getByToken(t_vtx, vtxs);
+  edm::Handle<pat::JetCollection> jets;
+  iEvent.getByToken(t_jets, jets);
 
   // Ensure that we have two reconstructed taus
-  if (taus->size() < 2)
+  // int rec_channel = -1; // 3 - tt; 1 - et; 2 - mt
+
+  if ((taus->size() < 1) || (taus->size() < 2 && expected_rec_channel > 2))
   {
-    if (debug) std::cout << "less than 2 reco taus: " << taus->size() << " < 2 \n";
+    if (debug) std::cout << "less than expected reco taus: " << taus->size() << "\n";
     cutflow->Fill(2);
     return;
   }
+  // // 3rd lepton veto
+  // if (expected_rec_channel > 2)
+  // {
+  //   if (taus->size() < 2 || additional_ele(electrons[0]) || additional_mu(muons[0])) rec_channel = -1;
+  // }
+  // else if (expected_rec_channel == 2)
+  // {
+  //   if ((taus->size() < 1 && muons->size() < 1) || additional_ele(electrons[0]) || additional_mu(muons[1])) rec_channel = -1;
+  // }
+  // else if (expected_rec_channel == 1)
+  // {
+  //   if ((taus->size() < 1 && electrons->size() < 1) || additional_ele(electrons[1]) || additional_mu(muons[0])) rec_channel = -1;
+  // }
+  // else
+  // {
+  //   std::cout << "Skip since reco and gen channel do not match\n";
+  //   cutflow->Fill(2);
+  //   return;
+  // }
 
-  // Ensure that we can match both taus to different generator taus
-  const float min_dr = 0.3; // Minimum deltaR valid for matching
-  const auto idx1 = FindTau(taus, t1_vis_p4, min_dr);
-  const auto idx2 = FindTau(taus, t2_vis_p4, min_dr);
-  if (idx1 == -1 || idx2 == -1)
+  if (expected_rec_channel > 2) // tt channel
   {
-    if (debug) std::cout << "one of the taus not matched to gen: idx1=" << idx1 << "; idx2="<< idx2 << " \n";
-    cutflow->Fill(3);
-    return;
+
+    // Ensure that we can match both taus to different generator taus
+    const float min_dr = 0.3; // Minimum deltaR valid for matching
+    const auto idx1 = FindTau(taus, t1_vis_p4, min_dr);
+    const auto idx2 = FindTau(taus, t2_vis_p4, min_dr);
+    if (idx1 == -1 || idx2 == -1)
+    {
+      if (debug) std::cout << "one of the taus not matched to gen: idx1=" << idx1 << "; idx2="<< idx2 << " \n";
+      cutflow->Fill(3);
+      return;
+    }
+    if (idx1 == idx2)
+    {
+      if (debug) std::cout << "same matched taus: idx1=" << idx1 << " == idx2="<< idx2 << " \n";
+      cutflow->Fill(3);
+      return;
+    }
+
+    // Reco Jets njets
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> l1, l2;
+      l1.SetPxPyPzE(taus->at(idx1).p4().Px(), taus->at(idx1).p4().Py(), taus->at(idx1).p4().Pz(), taus->at(idx1).p4().E());
+      l2.SetPxPyPzE(taus->at(idx2).p4().Px(), taus->at(idx2).p4().Py(), taus->at(idx2).p4().Pz(), taus->at(idx2).p4().E());
+      njets = CountJets(jets, l1, 0.5, l2, 0.5);
+
+    // Ensure that both reco taus have a reconstructed decay mode
+    v_t1_rec_dm = taus->at(idx1).decayMode();
+    v_t2_rec_dm = taus->at(idx2).decayMode();
+    if (v_t1_rec_dm < 0 || v_t2_rec_dm < 0)
+    {
+      if (debug) std::cout << "Ensure that both taus have a reconstructed decay mode: v_t1_rec_dm=" << v_t1_rec_dm << " == v_t2_rec_dm="<< v_t2_rec_dm << " \n";
+      cutflow->Fill(4);
+      return;
+    }
+
+    // Ensure that the reco taus have opposite charge
+    v_t1_rec_q = taus->at(idx1).charge();
+    v_t2_rec_q = taus->at(idx2).charge();
+    if (v_t1_rec_q == v_t2_rec_q)
+    {
+      if (debug) std::cout << "Ensure that the taus have opposite charge: v_t1_rec_q=" << v_t1_rec_q << " == v_t2_rec_q="<< v_t2_rec_q << " \n";
+      cutflow->Fill(5);
+      return;
+    }
+    if (v_t1_rec_q == 0 || v_t2_rec_q == 0)
+    {
+      if (debug) std::cout << "Ensure that the taus have charge: v_t1_rec_q=" << v_t1_rec_q << " == v_t2_rec_q="<< v_t2_rec_q << " \n";
+      cutflow->Fill(5);
+      return;
+    }
+
+    // Fill four-vector
+    auto t1_rec_p4 = taus->at(idx1).p4();
+    auto t2_rec_p4 = taus->at(idx2).p4();
+    SetP4Values(t1_rec_p4, v_t1_rec);
+    SetP4Values(t2_rec_p4, v_t2_rec);
+    lv_tau1_rec.SetPxPyPzE(t1_rec_p4.Px(),t1_rec_p4.Py(),t1_rec_p4.Pz(),t1_rec_p4.E());
+    lv_tau2_rec.SetPxPyPzE(t2_rec_p4.Px(),t2_rec_p4.Py(),t2_rec_p4.Pz(),t2_rec_p4.E());
+
+    // Apply baseline selection
+    if (baseline)
+    {
+      if (taus->at(idx1).pt() < 40) { cutflow->Fill(6); return; }
+      if (taus->at(idx2).pt() < 40) { cutflow->Fill(6); return; }
+
+      if (std::abs(taus->at(idx1).eta()) > 2.1) { cutflow->Fill(6); return; }
+      if (std::abs(taus->at(idx2).eta()) > 2.1) { cutflow->Fill(6); return; }
+
+      if (deltaR(t1_rec_p4, t2_rec_p4) < 0.5) { cutflow->Fill(6); return; }
+
+      const auto nameDM = "decayModeFinding";
+      if (taus->at(idx1).tauID(nameDM) < 0.5) { cutflow->Fill(6); return; }
+      if (taus->at(idx2).tauID(nameDM) < 0.5) { cutflow->Fill(6); return; }
+
+      const auto nameIso = "byVLooseIsolationMVArun2v1DBoldDMwLT";
+      if (taus->at(idx1).tauID(nameIso) < 0.5) { cutflow->Fill(6); return; }
+      if (taus->at(idx2).tauID(nameIso) < 0.5) { cutflow->Fill(6); return; }
+    }
+    tree_tt->Fill();
   }
-  if (idx1 == idx2)
+  else if (expected_rec_channel == 2) // mt channel
   {
-    if (debug) std::cout << "same matched taus: idx1=" << idx1 << " == idx2="<< idx2 << " \n";
-    cutflow->Fill(3);
-    return;
-  }
+    // Matching
+      const float min_dr = 0.3; // Minimum deltaR valid for matching
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> t1_vis_p4_new;
+      t1_vis_p4_new.SetPxPyPzE(t1_p4_vis.p4_vis.Px(), t1_p4_vis.p4_vis.Py(), t1_p4_vis.p4_vis.Pz(), t1_p4_vis.p4_vis.E());
+      const auto idx1 = FindTau(muons, t1_vis_p4_new, min_dr); //TODO: check with def
+      const auto idx2 = FindTau(taus, t2_vis_p4, min_dr);
+      if (idx1 == -1 || idx2 == -1 || idx1 == idx2)
+      {
+        if (debug) std::cout << "Bad matching: idx1=" << idx1 << "; idx2="<< idx2 << " \n";
+        cutflow->Fill(3);
+        return;
+      }
 
-  // Ensure that both reco taus have a reconstructed decay mode
-  v_t1_rec_dm = taus->at(idx1).decayMode();
-  v_t2_rec_dm = taus->at(idx2).decayMode();
-  if (v_t1_rec_dm < 0 || v_t2_rec_dm < 0)
+    // Reco Jets njets
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> l1, l2;
+      l1.SetPxPyPzE(muons->at(idx1).p4().Px(), muons->at(idx1).p4().Py(), muons->at(idx1).p4().Pz(), muons->at(idx1).p4().E());
+      l2.SetPxPyPzE(taus->at(idx2).p4().Px(), taus->at(idx2).p4().Py(), taus->at(idx2).p4().Pz(), taus->at(idx2).p4().E());
+      njets = CountJets(jets, l1, 0.5, l2, 0.5);
+
+    // Opposite charge
+      v_t1_rec_q = muons->at(idx1).charge();
+      v_t2_rec_q = taus->at(idx2).charge();
+      if ((v_t1_rec_q == v_t2_rec_q) || (v_t1_rec_q == 0 || v_t2_rec_q == 0))
+      {
+        if (debug) std::cout << "Bad charge of taus: v_t1_rec_q=" << v_t1_rec_q << " == v_t2_rec_q="<< v_t2_rec_q << " \n";
+        cutflow->Fill(5);
+        return;
+      }
+
+    // Fill reco four-vector
+      auto t1_rec_p4 = muons->at(idx1).p4();
+      auto t2_rec_p4 = taus->at(idx2).p4();
+      SetP4Values(t1_rec_p4, v_t1_rec);
+      SetP4Values(t2_rec_p4, v_t2_rec);
+      lv_tau1_rec.SetPxPyPzE(t1_rec_p4.Px(),t1_rec_p4.Py(),t1_rec_p4.Pz(),t1_rec_p4.E());
+      lv_tau2_rec.SetPxPyPzE(t2_rec_p4.Px(),t2_rec_p4.Py(),t2_rec_p4.Pz(),t2_rec_p4.E());
+
+    // Apply baseline selection
+    if (baseline)
+    {
+      // muon
+        if (muons->at(idx1).pt() < 20) { cutflow->Fill(6); return; }
+        if (std::abs(muons->at(idx1).eta()) > 2.1){ cutflow->Fill(6); return; }
+        if (fabs(muons->at(idx1).muonBestTrack()->dxy(vtxs->at(0).position())) < 0.045 && fabs(muons->at(idx1).muonBestTrack()->dz(vtxs->at(0).position()))  < 0.2) { cutflow->Fill(6); return; }
+      // tau
+        v_t2_rec_dm = taus->at(idx2).decayMode();
+        const auto nameDM = "decayModeFinding";
+
+        if (taus->at(idx2).pt() < 20) { cutflow->Fill(6); return; }
+        if (std::abs(taus->at(idx2).eta()) > 2.1) { cutflow->Fill(6); return; } // TODO: should be 2.3
+        if (v_t2_rec_dm < 0) { cutflow->Fill(4); return; }
+        if (taus->at(idx2).tauID(nameDM) < 0.5) { cutflow->Fill(6); return; }
+        // TODO: fabs(packedLeadTauCand->dz()) < 0.2  # The PackedCandidate::dz() method is wrt. the first PV by default
+        // TODO: check
+        const auto nameIso = "byVLooseIsolationMVArun2v1DBoldDMwLT";
+        if (taus->at(idx2).tauID(nameIso) < 0.5) { cutflow->Fill(6); return;}
+
+      // Pair
+        if (deltaR(t1_rec_p4, t2_rec_p4) < 0.5) { cutflow->Fill(6); return; }
+      // TODO: Post-sync ntuple ?
+    }
+    tree_mt->Fill();
+  }
+  else if (expected_rec_channel == 1) // et channel
   {
-    if (debug) std::cout << "Ensure that both taus have a reconstructed decay mode: v_t1_rec_dm=" << v_t1_rec_dm << " == v_t2_rec_dm="<< v_t2_rec_dm << " \n";
-    cutflow->Fill(4);
-    return;
+    // Matching
+      const float min_dr = 0.3; // Minimum deltaR valid for matching
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> t1_vis_p4_new;
+      t1_vis_p4_new.SetPxPyPzE(t1_p4_vis.p4_vis.Px(), t1_p4_vis.p4_vis.Py(), t1_p4_vis.p4_vis.Pz(), t1_p4_vis.p4_vis.E());
+      const auto idx1 = FindTau(electrons, t1_vis_p4_new, min_dr); //TODO: check with def
+      const auto idx2 = FindTau(taus, t2_vis_p4, min_dr);
+      if ((idx1 == -1 || idx2 == -1) || (idx1 == idx2))
+      {
+        if (debug) std::cout << "Bad matching: idx1=" << idx1 << "; idx2="<< idx2 << " \n";
+        cutflow->Fill(3);
+        return;
+      }
+
+    // Reco Jets njets
+      ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>> l1, l2;
+      l1.SetPxPyPzE(electrons->at(idx1).p4().Px(), electrons->at(idx1).p4().Py(), electrons->at(idx1).p4().Pz(), electrons->at(idx1).p4().E());
+      l2.SetPxPyPzE(taus->at(idx2).p4().Px(), taus->at(idx2).p4().Py(), taus->at(idx2).p4().Pz(), taus->at(idx2).p4().E());
+      njets = CountJets(jets, l1, 0.5, l2, 0.5);
+
+    // Opposite charge
+      v_t1_rec_q = electrons->at(idx1).charge();
+      v_t2_rec_q = taus->at(idx2).charge();
+      if ((v_t1_rec_q == v_t2_rec_q) || (v_t1_rec_q == 0 || v_t2_rec_q == 0))
+      {
+        if (debug) std::cout << "Bad charge of taus: v_t1_rec_q=" << v_t1_rec_q << " == v_t2_rec_q="<< v_t2_rec_q << " \n";
+        cutflow->Fill(5);
+        return;
+      }
+
+    // Fill reco four-vector
+      auto t1_rec_p4 = electrons->at(idx1).p4();
+      auto t2_rec_p4 = taus->at(idx2).p4();
+      SetP4Values(t1_rec_p4, v_t1_rec);
+      SetP4Values(t2_rec_p4, v_t2_rec);
+      lv_tau1_rec.SetPxPyPzE(t1_rec_p4.Px(),t1_rec_p4.Py(),t1_rec_p4.Pz(),t1_rec_p4.E());
+      lv_tau2_rec.SetPxPyPzE(t2_rec_p4.Px(),t2_rec_p4.Py(),t2_rec_p4.Pz(),t2_rec_p4.E());
+
+    // Apply baseline selection
+    if (baseline)
+    {
+      // electron
+        if (electrons->at(idx1).pt() < 25) { cutflow->Fill(6); return; }
+        if (std::abs(electrons->at(idx1).eta()) > 2.1){ cutflow->Fill(6); return; }
+        if (fabs(electrons->at(idx1).gsfTrack()->dxy(vtxs->at(0).position())) < 0.045 &&
+            fabs(electrons->at(idx1).gsfTrack()->dz(vtxs->at(0).position())) < 0.2) { cutflow->Fill(6); return; }
+        // TODO:
+          // elec.gsfTrack()->hitPattern().numberOfHits(reco::HitPattern::MISSING_INNER_HITS))) <=1     and
+          // elec.passConversionVeto()
+      // tau
+        v_t2_rec_dm = taus->at(idx2).decayMode();
+        const auto nameDM = "decayModeFinding";
+
+        if (taus->at(idx2).pt() < 20) { cutflow->Fill(6); return; }
+        if (std::abs(taus->at(idx2).eta()) > 2.1) { cutflow->Fill(6); return; } // TODO: should be 2.3
+        if (v_t2_rec_dm < 0) { cutflow->Fill(4); return; }
+        if (taus->at(idx2).tauID(nameDM) < 0.5) { cutflow->Fill(6); return; }
+        // TODO: fabs(packedLeadTauCand->dz()) < 0.2  # The PackedCandidate::dz() method is wrt. the first PV by default
+        // TODO: check if this should be removed
+        const auto nameIso = "byVLooseIsolationMVArun2v1DBoldDMwLT";
+        if (taus->at(idx2).tauID(nameIso) < 0.5) { cutflow->Fill(6); return;}
+
+      // Pair
+        if (deltaR(t1_rec_p4, t2_rec_p4) < 0.5) { cutflow->Fill(6); return; }
+      // TODO: Post-sync ntuple ?
+    }
+    tree_et->Fill();
   }
+  else return;
 
-  // Ensure that the reco taus have opposite charge
-  v_t1_rec_q = taus->at(idx1).charge();
-  v_t2_rec_q = taus->at(idx2).charge();
-  if (v_t1_rec_q == v_t2_rec_q)
-  {
-    if (debug) std::cout << "Ensure that the taus have opposite charge: v_t1_rec_q=" << v_t1_rec_q << " == v_t2_rec_q="<< v_t2_rec_q << " \n";
-    cutflow->Fill(5);
-    return;
-  }
-  if (v_t1_rec_q == 0 || v_t2_rec_q == 0)
-  {
-    if (debug) std::cout << "Ensure that the taus have charge: v_t1_rec_q=" << v_t1_rec_q << " == v_t2_rec_q="<< v_t2_rec_q << " \n";
-    cutflow->Fill(5);
-    return;
-  }
-
-  // Fill four-vector
-  auto t1_rec_p4 = taus->at(idx1).p4();
-  auto t2_rec_p4 = taus->at(idx2).p4();
-  SetP4Values(t1_rec_p4, v_t1_rec);
-  SetP4Values(t2_rec_p4, v_t2_rec);
-  lv_tau1_rec.SetPxPyPzE(t1_rec_p4.Px(),t1_rec_p4.Py(),t1_rec_p4.Pz(),t1_rec_p4.E());
-  lv_tau2_rec.SetPxPyPzE(t2_rec_p4.Px(),t2_rec_p4.Py(),t2_rec_p4.Pz(),t2_rec_p4.E());
-
-  // Apply baseline selection
-  if (baseline)
-  {
-    if (taus->at(idx1).pt() < 40)
-    {
-      // if (debug) std::cout << "Baseline selection: pt1=" << taus->at(idx1).pt() << " < 40" << " \n";
-      cutflow->Fill(6);
-      return;
-    }
-    if (taus->at(idx2).pt() < 40)
-    {
-      // if (debug) std::cout << "Baseline selection: pt2=" << taus->at(idx2).pt() << " < 40" << " \n";
-      cutflow->Fill(6);
-      return;
-    }
-
-    if (std::abs(taus->at(idx1).eta()) > 2.1)
-    {
-      // if (debug) std::cout << "Baseline selection: etha1=" << std::abs(taus->at(idx1).eta()) << " > 2.1" << " \n";
-      cutflow->Fill(6);
-      return;
-    }
-    if (std::abs(taus->at(idx2).eta()) > 2.1)
-    {
-      // if (debug) std::cout << "Baseline selection: etha2=" << std::abs(taus->at(idx2).eta()) << " > 2.1" << " \n";
-      cutflow->Fill(6);
-      return;
-    }
-
-    if (deltaR(t1_rec_p4, t2_rec_p4) < 0.5)
-    {
-      // if (debug) std::cout << "Baseline selection: dR=" << deltaR(t1_rec_p4, t2_rec_p4) << " < 0.5" << " \n";
-      cutflow->Fill(6);
-      return;
-    }
-
-    const auto nameDM = "decayModeFinding";
-    if (taus->at(idx1).tauID(nameDM) < 0.5)
-    {
-      // if (debug) std::cout << "Baseline selection: decayModeFinding reco tau1 < 0.5 \n";
-      cutflow->Fill(6);
-      return;
-    }
-    if (taus->at(idx2).tauID(nameDM) < 0.5)
-    {
-      // if (debug) std::cout << "Baseline selection: decayModeFinding reco tau2 < 0.5 \n";
-      cutflow->Fill(6);
-      return;
-    }
-
-    const auto nameIso = "byVLooseIsolationMVArun2v1DBoldDMwLT";
-    if (taus->at(idx1).tauID(nameIso) < 0.5)
-    {
-      // if (debug) std::cout << "Baseline selection: byVLooseIsolationMVArun2v1DBoldDMwLT reco tau1 " << taus->at(idx1).tauID(nameIso) << " < 0.5 \n";
-      cutflow->Fill(6);
-      return;
-    }
-    if (taus->at(idx2).tauID(nameIso) < 0.5)
-    {
-      // if (debug) std::cout << "Baseline selection: byVLooseIsolationMVArun2v1DBoldDMwLT reco tau2 " << taus->at(idx2).tauID(nameIso) << " < 0.5 \n";
-      cutflow->Fill(6);
-      return;
-    }
-  }
-
-  // Fill event
   tree->Fill();
 }
 
