@@ -36,10 +36,10 @@ particle_weights=np.load(open("savemodeldir/particle_weights","rb"))
 restframe_weights=np.load(open("savemodeldir/restframe_weights","rb"))
 
 
-fig,ax=plot_lbn_weights(particle_weights,"weights")
+fig,ax=plot_lbn_weights(particle_weights,"particle")
 ax.plot()
-fig.savefig("savemodeldir/test_weights")
+fig.savefig("savemodeldir/test_weights_particles")
 
-fig,ax=plot_lbn_weights(restframe_weights,"weights")
+fig,ax=plot_lbn_weights(restframe_weights,"rest frame")
 ax.plot()
 fig.savefig("savemodeldir/test_weights_rest")

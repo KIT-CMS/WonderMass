@@ -107,7 +107,7 @@ std_t = np.std(y_data, axis=0)
 # TENSORFLOW ####################################
 # split train and test data
 x_train,x_test,y_train,y_test = train_test_split(x_data,y_data,test_size=0.2,random_state=1234)
-
+x_train,x_val,y_train,y_val = train_test_split(x_train,y_train,test_size=0.1,random_state=1234)
 # create a tensorflow session
 gpu_options = tf.GPUOptions(allow_growth=True)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
@@ -146,7 +146,7 @@ lbn = LBN(6, boost_mode=LBN.PAIRS, batch_norm=True, is_training=is_training_t)
 
 
 # extract features out of the lbn
-features = lbn(next_batch[0])  # Performs all the Lorenz Boost Network
+features = lbn(next_batch[0],features=["E","px","py","pz","pt", "eta", "phi", "m", "pair_cos"])  # Performs all the Lorenz Boost Network
 
 # Build DNN model for mass regression
 hidden = tf.layers.dense(
@@ -155,23 +155,24 @@ hidden = tf.layers.dense(
     500,
     activation=tf.nn.elu,
 )
-hidden=tf.layers.dropout(
-hidden,
-rate=0.3,
-training=is_training_t,
-)
-for i in range(3):
+hidden = tf.layers.batch_normalization(hidden, training=is_training_t)
+# hidden=tf.layers.dropout(
+# hidden,
+# rate=0.3,
+# training=is_training_t,
+# )
+for i in range(1):
     hidden = tf.layers.dense(
         hidden,
         500,
         activation=tf.nn.elu,
     )
     hidden = tf.layers.batch_normalization(hidden, training=is_training_t)
-    hidden=tf.layers.dropout(
-    hidden,
-    rate=0.3,
-    training=is_training_t,
-    )
+    # hidden=tf.layers.dropout(
+    # hidden,
+    # rate=0.3,
+    # training=is_training_t,
+    # )
 
 output = tf.layers.dense(hidden, 1, activation=None,name="output")  # 1 output node: for mass of di-tau system
 
@@ -204,18 +205,37 @@ for i in tqdm(range(n_epochs)):
     print("\n\033[95m[EPOCH]\033[0;0m: {}".format(i))
     while True:  # feed to one epoch all the data in batches...
         try:
-            train, loss_train, _ = sess.run([trainer, loss, updates], feed_dict={is_training_t: True})
-            loss_test = sess.run(loss, feed_dict={is_training_t: False})
+            train, _ = sess.run([trainer, updates], feed_dict={is_training_t: True})
         except tf.errors.OutOfRangeError:  # until no more batches left to feed
             sess.run(training_init, feed_dict={
                 x_t: x_train,  # feeling the placeholders
                 y_t: y_train,  # feeling the placeholders
             })
             break
-    print("\033[1;32m[TRAIN]\033[0;0m loss: {}".format(loss_train))
-    print("\033[1;33m[TEST]\033[0;0m loss: {} \n".format(loss_test))
-    train_loss_results.append(loss_train)
-    test_loss_results.append(loss_test)
+    loss_train_epoch=[]
+    while True:
+        try:
+            loss_train_epoch.append(sess.run(loss, feed_dict={is_training_t: False}))
+        except tf.errors.OutOfRangeError:
+            sess.run(training_init, feed_dict={
+                x_t: x_val,  # feeling the placeholders
+                y_t: y_val,  # feeling the placeholders
+            })
+            break
+    loss_val_epoch=[]
+    while True:
+        try:
+            loss_val_epoch.append(sess.run(loss, feed_dict={is_training_t: False}))
+        except tf.errors.OutOfRangeError:
+            sess.run(training_init, feed_dict={
+                x_t: x_train,  # feeling the placeholders
+                y_t: y_train,  # feeling the placeholders
+            })
+            break
+    print("\033[1;32m[TRAIN]\033[0;0m loss: {}".format(np.mean(np.array(loss_train_epoch))))
+    print("\033[1;33m[VAL]\033[0;0m loss: {} \n".format(np.mean(np.array(loss_val_epoch))))
+    train_loss_results.append(np.mean(np.array(loss_train_epoch)))
+    test_loss_results.append(np.mean(np.array(loss_val_epoch)))
 
     #save best training
     if len(test_loss_results)!=1:
@@ -233,7 +253,12 @@ for i in tqdm(range(n_epochs)):
             print("test loss has improved")
         else:
             print("test loss has not improved from",min_loss)
+    #early stopping
+    if len(test_loss_results)>100 and min(test_loss_results[i-100:])>min_loss:
+        print("no improvement in the last 100 epochs")
+        break
     pass
+
 
 #Save the mean and std and test data for plotting results
 np.save(open("savemodeldir/mean","wb"),mean_t)

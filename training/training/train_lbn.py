@@ -101,6 +101,8 @@ std_t = np.std(y_data, axis=0)
 # TENSORFLOW ####################################
 # split train and test data
 x_train,x_test,y_train,y_test = train_test_split(x_data,y_data,test_size=0.2,random_state=1234)
+#split validation data and train data
+x_train,x_val,y_train,y_val = train_test_split(x_train,y_train,test_size=0.1,random_state=1234)
 
 # create a tensorflow session
 gpu_options = tf.GPUOptions(allow_growth=True)
@@ -127,7 +129,7 @@ training_init = iterator.make_initializer(dataset, name='dataset_init')
 next_batch= iterator.get_next()
 
 # initialize the LBN, set 4 combinations
-lbn = LBN(4, boost_mode=LBN.PAIRS, batch_norm=True, is_training=is_training_t)
+lbn = LBN(6, boost_mode=LBN.PAIRS, batch_norm=True, is_training=is_training_t)
 
 
 # # create a feature tensor based on input four-vectors
@@ -140,32 +142,34 @@ lbn = LBN(4, boost_mode=LBN.PAIRS, batch_norm=True, is_training=is_training_t)
 
 
 # extract features out of the lbn
-features = lbn(next_batch[0])  # Performs all the Lorenz Boost Network
+features = lbn(next_batch[0],features=["E","px","py","pz","pt", "eta", "phi", "m", "pair_cos"])  # Performs all the Lorenz Boost Network
 
 # Build DNN model for mass regression
 hidden = tf.layers.dense(
     #tf.reshape(next_batch[0],[BATCH_SIZE,-1]),      #only for training without lbn (instead of features)
     features,
-    500,
+    1024,
     activation=tf.nn.elu,
 )
-hidden=tf.layers.dropout(
-hidden,
-rate=0.3,
-training=is_training_t,
-)
-for i in range(3):
+hidden = tf.layers.batch_normalization(hidden, training=is_training_t)
+#hidden=tf.layers.dropout(
+#hidden,
+#rate=0.3,
+#training=is_training_t,
+#)
+
+for i in range(1):
     hidden = tf.layers.dense(
         hidden,
         500,
         activation=tf.nn.elu,
     )
     hidden = tf.layers.batch_normalization(hidden, training=is_training_t)
-    hidden=tf.layers.dropout(
-    hidden,
-    rate=0.3,
-    training=is_training_t,
-    )
+    #hidden=tf.layers.dropout(
+    #hidden,
+    #rate=0.3,
+    #training=is_training_t,
+    #)
 
 output = tf.layers.dense(hidden, 1, activation=None,name="output")  # 1 output node: for mass of di-tau system
 
@@ -198,49 +202,74 @@ for i in tqdm(range(n_epochs)):
     print("\n\033[95m[EPOCH]\033[0;0m: {}".format(i))
     while True:  # feed to one epoch all the data in batches...
         try:
-            train, loss_train, _ = sess.run([trainer, loss, updates], feed_dict={is_training_t: True})
-            loss_test = sess.run(loss, feed_dict={is_training_t: False})
+            train, _ = sess.run([trainer, updates], feed_dict={is_training_t: True})
         except tf.errors.OutOfRangeError:  # until no more batches left to feed
             sess.run(training_init, feed_dict={
                 x_t: x_train,  # feeling the placeholders
                 y_t: y_train,  # feeling the placeholders
             })
             break
-    print("\033[1;32m[TRAIN]\033[0;0m loss: {}".format(loss_train))
-    print("\033[1;33m[TEST]\033[0;0m loss: {} \n".format(loss_test))
-    train_loss_results.append(loss_train)
-    test_loss_results.append(loss_test)
+    loss_train_epoch=[]
+    while True:
+        try:
+            loss_train_epoch.append(sess.run(loss, feed_dict={is_training_t: False}))
+        except tf.errors.OutOfRangeError:
+            sess.run(training_init, feed_dict={
+                x_t: x_val,  # feeling the placeholders
+                y_t: y_val,  # feeling the placeholders
+            })
+            break
+    loss_val_epoch=[]
+    while True:
+        try:
+            loss_val_epoch.append(sess.run(loss, feed_dict={is_training_t: False}))
+        except tf.errors.OutOfRangeError:
+            sess.run(training_init, feed_dict={
+                x_t: x_train,  # feeling the placeholders
+                y_t: y_train,  # feeling the placeholders
+            })
+            break
+    print("\033[1;32m[TRAIN]\033[0;0m loss: {}".format(np.mean(np.array(loss_train_epoch))))
+    print("\033[1;33m[VAL]\033[0;0m loss: {} \n".format(np.mean(np.array(loss_val_epoch))))
+    train_loss_results.append(np.mean(np.array(loss_train_epoch)))
+    test_loss_results.append(np.mean(np.array(loss_val_epoch)))
 
     #save best training
     if len(test_loss_results)!=1:
         if test_loss_results[i]<min(test_loss_results[0:i]):
-            rmtree('savemodeldir', ignore_errors=True)
-            tf.saved_model.simple_save(sess, export_dir="savemodeldir",
+            rmtree('savemodeldir_2', ignore_errors=True)
+            tf.saved_model.simple_save(sess, export_dir="savemodeldir_2",
                                             inputs={"x_t": x_t, "y_t": y_t,
                                                     "isTrainingBool": is_training_t},
                                                     outputs={"output": output})
             particle_weights=sess.run(lbn.particle_weights)
             restframe_weights=sess.run(lbn.restframe_weights)
-            np.save(open("savemodeldir/particle_weights","wb"), particle_weights)
-            np.save(open("savemodeldir/restframe_weights","wb"), restframe_weights)
+            np.save(open("savemodeldir_2/particle_weights","wb"), particle_weights)
+            np.save(open("savemodeldir_2/restframe_weights","wb"), restframe_weights)
             min_loss=test_loss_results[i]
             print("test loss has improved")
         else:
             print("test loss has not improved from",min_loss)
+    #early stopping
+    if len(test_loss_results)>100 and min(test_loss_results[i-100:])>min_loss:
+        print("no improvement in the last 100 epochs")
+        break
     pass
 
 #Save the mean and std and test data for plotting results
-np.save(open("savemodeldir/mean","wb"),mean_t)
-np.save(open("savemodeldir/std","wb"),std_t)
-np.save(open("savemodeldir/x_test","wb"), x_test)
-np.save(open("savemodeldir/y_test","wb"), y_test)
+np.save(open("savemodeldir_2/mean","wb"),mean_t)
+np.save(open("savemodeldir_2/std","wb"),std_t)
+np.save(open("savemodeldir_2/x_test","wb"), x_test)
+np.save(open("savemodeldir_2/y_test","wb"), y_test)
 
-np.save(open("train_loss", "wb"), train_loss_results)
-np.save(open("test_loss", "wb"), test_loss_results)
+np.save(open("savemodeldir_2/train_loss", "wb"), train_loss_results)
+np.save(open("savemodeldir_2/test_loss", "wb"), test_loss_results)
+
+#features=FeatureFactory(lbn)
 
 #Evaluating the model on test dataset, saving the result
 
-def make_prediction(x_data,export_dir="savemodeldir"):
+def make_prediction(x_data,export_dir="savemodeldir_2"):
     #x_data is np.array of Taus and MET in the following shape: (number_events,number_particles=3,dimension_fourvectors=4)
     #where the particle number corresponds to the first tau,second tau, MET
     #and the fourvectors are the four components of them: (E,px,py,pz)
@@ -285,7 +314,7 @@ def make_prediction(x_data,export_dir="savemodeldir"):
         return prediction
 
 #predict masses (y_values) for the test data
-x_test_data=np.load(open("savemodeldir/x_test","rb"))
-y_test_pred=make_prediction(x_test_data,export_dir="savemodeldir") #be aware of the fact that y_test_pred is shorter than y_train, because the rest of the batch is dropped
+x_test_data=np.load(open("savemodeldir_2/x_test","rb"))
+y_test_pred=make_prediction(x_test_data,export_dir="savemodeldir_2") #be aware of the fact that y_test_pred is shorter than y_train, because the rest of the batch is dropped
 
-np.save(open("savemodeldir/y_test_pred","wb"), y_test_pred)
+np.save(open("savemodeldir_2/y_test_pred","wb"), y_test_pred)

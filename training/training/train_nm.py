@@ -25,7 +25,7 @@ save_path="tempsave/"
 def build_model(inputs, outputs_t):
     nodes = 500
     num_layer = 4
-    activation = "elu"
+    activation = "relu"
     l2reg = None#l2(1e-2)
     #drop_p = 0.3
 
@@ -135,9 +135,9 @@ def compile_model(model):
 
 def main():
     x_train = np.load(open(save_path+"x_train_resampled.npy", "rb"))
-    x_val = np.load(open(save_path+"x_test_resampled.npy", "rb"))
+    x_test = np.load(open(save_path+"x_test_resampled.npy", "rb"))
     y_train = np.load(open(save_path+"y_t_train_resampled.npy", "rb"))
-    y_val = np.load(open(save_path+"y_t_test_resampled.npy", "rb"))
+    y_test = np.load(open(save_path+"y_t_test_resampled.npy", "rb"))
 
     inputs = pickle.load(open(save_path+"x.pickle", "rb"))
     outputs_t = pickle.load(open(save_path+"y_t.pickle", "rb"))
@@ -147,8 +147,7 @@ def main():
     model = build_model(inputs, outputs_t)
     compile_model(model)
 
-    #x_train, x_val, y_train, y_val = \
-    #        train_test_split(x, y_t, train_size=0.80, random_state=1234)
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, train_size=0.80, random_state=1234)
 
     history = model.fit(x_train, y_train,
                         validation_data=(x_val, y_val),
@@ -161,12 +160,12 @@ def main():
     pickle.dump({h: history.history[h] for h in history.history}, open(save_path+"history.pickle", "wb"))
 
     #save prediction of masses for test dataset, is used for the plotting_results.py script
-    p = model.predict(x_val)
+    p = model.predict(x_test)
     pred = {}
     truth = {}
     for i, k in enumerate(outputs_t):
         pred[k] = p[:,i]
-        truth[k] = y_val[:,i]
+        truth[k] = y_test[:,i]
 
     tau_mass=1.77
     for d in [pred, truth]:

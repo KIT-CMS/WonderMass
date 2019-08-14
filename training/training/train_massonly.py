@@ -3,6 +3,7 @@ np.random.seed(1234)
 import pickle
 
 from keras.models import Model, load_model
+from keras.optimizers import Adam
 from keras.layers import Input, Dense, concatenate, Lambda, Dropout, BatchNormalization
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.regularizers import l2
@@ -24,7 +25,7 @@ save_path="tempsave/"
 
 def build_model(inputs):
     nodes = 500
-    num_layer = 4
+    num_layer = 2
     activation = "elu"
     l2reg = None#l2(1e-2)
     drop_p = 0.3
@@ -34,7 +35,7 @@ def build_model(inputs):
     for i in range(num_layer):
         net = Dense(nodes, activation=activation, kernel_regularizer=l2reg)(net)
         net = BatchNormalization()(net)
-        net = Dropout(drop_p)(net)
+        #net = Dropout(drop_p)(net)
     f = Dense(1, activation="linear", name="f")(net)
 
     model = Model(inputs=(inputs_a), outputs=f)
@@ -55,9 +56,9 @@ def compile_model(model):
 
 def main():
     x_train = np.load(open(save_path+"x_train_resampled.npy", "rb"))
-    x_val = np.load(open(save_path+"x_test_resampled.npy", "rb"))
+    x_test = np.load(open(save_path+"x_test_resampled.npy", "rb"))
     mass_train=np.load(open(save_path+"mass_train_npy","rb"))
-    mass_val=np.load(open(save_path+"mass_test_npy","rb"))
+    mass_test=np.load(open(save_path+"mass_test_npy","rb"))
 
     inputs = pickle.load(open(save_path+"x.pickle", "rb"))
     print("Inputs: {}".format(inputs))
@@ -66,8 +67,7 @@ def main():
     model = build_model(inputs)
     compile_model(model)
 
-    #x_train, x_val, y_train, y_val = \
-    #        train_test_split(x, y_t, train_size=0.80, random_state=1234)
+    x_train, x_val, mass_train, mass_val = train_test_split(x_train, mass_train, train_size=0.90, random_state=1234)
 
     history = model.fit(x_train, mass_train,
                         validation_data=(x_val, mass_val),
@@ -80,7 +80,7 @@ def main():
     pickle.dump({h: history.history[h] for h in history.history}, open(save_path+"history.pickle", "wb"))
 
     #save mass prediction for test dataset
-    predict=np.array(model.predict(x_val))
+    predict=np.array(model.predict(x_test))
     predict=np.squeeze(predict)
     np.save(open(save_path+"mass_test_pred","wb"),predict)
 
